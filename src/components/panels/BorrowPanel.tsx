@@ -108,7 +108,8 @@ function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
   const [colText, setColText] = useState("");
   const [debtText, setDebtText] = useState("");
 
-  // Independent cross-check from Pyth when configured; never required for risk-reducing actions.
+  // Independent cross-check from Pyth (Hermes with a key, otherwise Pyth's on-chain feeds);
+  // never required for risk-reducing actions. Prices older than five minutes are ignored.
   const independent = useMemo(() => {
     const a = oracle.data?.prices?.[vault.collateralMint];
     const b = oracle.data?.prices?.[vault.debtMint];
@@ -116,6 +117,8 @@ function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
     const pa = parseHermesEntry({ id: a.feedId, price: a.price });
     const pb = parseHermesEntry({ id: b.feedId, price: b.price });
     if (!pa || !pb) return null;
+    const nowSec = Date.now() / 1000;
+    if (nowSec - pa.publishTime > 300 || nowSec - pb.publishTime > 300) return null;
     const ratio = ratioDiv(pa.price, pb.price);
     return ratio ? { price: ratio, confidenceRatio: { num: 0n, den: 1n } as Ratio } : null;
   }, [oracle.data, vault.collateralMint, vault.debtMint]);
@@ -193,7 +196,7 @@ function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
             {vault.oracleTimestampMs ? `${formatAge(oracleCheck.ageMs)} ago` : "Not reported"} ({raw.oracleSources.map((s) => Object.keys(s.sourceType ?? {})[0] ?? "source").join(", ") || "unknown source"})
           </Row>
           <Row label="Independent check" tone="muted">
-            {oracleCheck.deviationBps !== null ? `Pyth differs by ${(Number(oracleCheck.deviationBps) / 100).toFixed(2)}%` : oracle.isError ? "Pyth unavailable on this deployment" : demo ? "Not in demo" : "No mapped Pyth feed"}
+            {oracleCheck.deviationBps !== null ? `Pyth differs by ${(Number(oracleCheck.deviationBps) / 100).toFixed(2)}%` : oracle.isError ? "Pyth unavailable right now" : demo ? "Not in demo" : "No current Pyth price for this pair"}
           </Row>
         </dl>
         {!oracleCheck.ok ? (

@@ -14,7 +14,7 @@ No upstream source commits are pinned. Code dependencies are pinned by exact ver
 | Jupiter Lend Earn API | beta, `/lend/v1/earn/*` | mainnet | Supply and withdraw | Implemented; fixture-tested |
 | Jupiter Lend Borrow API | beta, `/lend/v1/borrow/*` | mainnet | Vaults, positions, operate | Implemented; fixture-tested |
 | Solana Privacy Rings | `@heliuslabs/spr` **0.9.0-alpha** | devnet; mainnet gated off | Private balance, private transfer, public withdrawal | Implemented; **not run against live services** (needs `HELIUS_API_KEY`) |
-| Pyth price service | Hermes-compatible `GET /v2/updates/price/latest` | n/a (off-chain) | Independent check before risk-increasing borrow actions | Implemented; needs `PYTH_API_KEY` |
+| Pyth prices | Push feed accounts on Solana (default) or Hermes `GET /v2/updates/price/latest` with a key | mainnet | Independent check before risk-increasing borrow actions | Implemented; on-chain path needs no Pyth key |
 | Solana JSON-RPC | standard methods (allowlisted) | mainnet, devnet | Balances, mint accounts, simulation, submission, status | Implemented; fixture-tested |
 | Wallet Standard | `@wallet-standard/app` 1.1.1, `@solana/wallet-standard-features` 1.5.0 | n/a | Connect, sign transaction, sign derivation message | Implemented; tested with an injected QA wallet only |
 
@@ -82,7 +82,8 @@ Scales used by the vault math (`src/lib/credit/vault-math.ts`):
 
 ## Pyth price service
 
-- `GET {PYTH_HERMES_BASE}/v2/updates/price/latest?ids[]=…&parsed=true` with `Authorization: Bearer {PYTH_API_KEY}`, server-side only. Default base `https://pyth.dourolabs.app/hermes`. The public Hermes endpoint stopped serving unauthenticated requests on 2026-08-26, so without a key the route returns `503 not_configured` and the borrow panel reports the independent check as unavailable.
+- Without a key (default): Pyth's **push feed accounts on Solana**, read with `getMultipleAccounts` through this deployment's RPC. Each account is the PDA of the Pyth Push Oracle program `pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT` with seeds `[shard u16 LE = 0, feed id]`, owned by the Pyth Receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ` (or the push oracle), holding a `PriceUpdateV2`. NOCT checks the account type, the feed id and that the update is fully verified, and ignores prices older than five minutes. The derivation reproduces the published BTC/USD and SOL/USD accounts (verified 2026-11-10). Pyth keeps these accounts updated for widely used feeds; a mint whose feed has no current account simply has no independent check.
+- With `PYTH_API_KEY`: `GET {PYTH_HERMES_BASE}/v2/updates/price/latest?ids[]=…&parsed=true` with `Authorization: Bearer {PYTH_API_KEY}`, server-side only. Default base `https://pyth.dourolabs.app/hermes`. Hermes stopped serving unauthenticated requests on 2026-08-26, and Pyth's free plan includes no API access.
 - Feed ids (read from `/v2/price_feeds`, 2026-11-10): SOL, USDC, USDT, JUP, BONK, WIF, EURC, JitoSOL, mSOL. A mint without a mapped feed has no independent check; feeds are never guessed from a symbol.
 
 ## Solana RPC

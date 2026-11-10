@@ -96,7 +96,7 @@ export function SecuritySettings() {
             <Row label="Private balances, mainnet" tone={caps.data.privacy.mainnet.enabled ? "accent" : "muted"}>
               {caps.data.privacy.mainnet.enabled ? "Enabled by operator" : (caps.data.privacy.mainnet.reason ?? "Off")}
             </Row>
-            <Row label="Independent oracle">{caps.data.pyth.configured ? "Pyth (Hermes-compatible API)" : "Not configured"}</Row>
+            <Row label="Independent oracle">{caps.data.pyth.configured ? "Pyth via Hermes (API key)" : "Pyth feeds read on chain"}</Row>
             <Row label="Mainnet RPC">{caps.data.rpc.mainnet.publicDefault ? "Public endpoint (rate limited)" : "Dedicated endpoint"}</Row>
           </dl>
         ) : (

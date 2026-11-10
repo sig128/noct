@@ -40,7 +40,7 @@ These paths exist end to end in code, compile into the production bundle and use
 | Swaps paid from the private balance (live) | Depends on the Privacy Rings path above plus a live Jupiter swap | A small three-step run on mainnet after the private balance works |
 | Wallet compatibility | Tested only with an injected QA wallet | Phantom, Solflare, Backpack and a hardware wallet; v1 transaction support for private operations |
 | Program upgrade-authority report | Fixture RPC has no program accounts, so Settings shows "Not deployed on this network" there | Read against mainnet RPC |
-| Pyth independent check | Needs `PYTH_API_KEY` | Compare with the vault oracle on a live market |
+| Pyth independent check | On-chain feed reading tested against synthetic accounts and the published account addresses only | Compare with the vault oracle on a live market |
 | Reconciliation under real congestion | Simulated in tests only | Observe a slow landing; confirm no resubmission and correct final state |
 
 ## 3. Requires keys or access
@@ -49,7 +49,7 @@ These paths exist end to end in code, compile into the production bundle and use
 | --- | --- |
 | `HELIUS_API_KEY` | Private balances on devnet (indexer, prover, Helius RPC) |
 | `HELIUS_API_KEY` + `SPR_MAINNET_ENABLED=true` | Private balances on mainnet (Helius launched the Default Ring on mainnet on 2026-11-10; still beta) |
-| `PYTH_API_KEY` | Independent oracle check before borrowing or withdrawing collateral |
+| `PYTH_API_KEY` (optional) | Pyth prices from Hermes instead of Pyth's on-chain feed accounts; the independent check works without it |
 | `JUPITER_API_KEY` | Higher Jupiter rate limits than the keyless tier |
 | `SOLANA_RPC_URL_MAINNET`, `SOLANA_RPC_URL_DEVNET` | Reliable RPC instead of the rate-limited public endpoints |
 

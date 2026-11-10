@@ -31,7 +31,7 @@ All in integer base units with explicit rounding:
 ### Guards
 
 - **Oracle freshness.** A vault oracle older than 15 minutes, or with no timestamp, blocks risk-increasing actions.
-- **Independent check.** With `PYTH_API_KEY`, the vault oracle is compared with Pyth; more than 3% apart blocks risk-increasing actions. Without a key the check is reported as unavailable on this deployment (not passed).
+- **Independent check.** The vault oracle is compared with Pyth, read from Pyth's on-chain feed accounts (or from Hermes when `PYTH_API_KEY` is set); more than 3% apart blocks risk-increasing actions. Pyth prices older than five minutes are ignored; when no current Pyth price exists for the pair the check is reported as unavailable (not passed).
 - **Risk-increasing** means borrowing more or withdrawing collateral. Repaying and adding collateral are always allowed, so a stale oracle can never trap a user in a position they are trying to make safer.
 - Borrowing above available liquidity, below the market minimum, or above max LTV is refused before a transaction is built.
 - The transaction from `/borrow/operate` must have the signer as fee payer and sole signer, invoke only System, Compute Budget, Token, Token-2022, Associated Token and the Jupiter Lend vaults, liquidity and oracle programs, and pass simulation.

@@ -41,7 +41,7 @@ npm run build
 npm start                    # http://localhost:3000
 ```
 
-Without any keys the app runs against public endpoints: Jupiter's keyless API (low rate limit) and the public Solana RPC. Private balances need `HELIUS_API_KEY`; the independent oracle check needs `PYTH_API_KEY`. The Settings panel lists what this deployment has configured.
+Without any keys the app runs against public endpoints: Jupiter's keyless API (low rate limit) and the public Solana RPC. Private balances need `HELIUS_API_KEY`. The independent oracle check reads Pyth's on-chain feeds and needs no Pyth key. The Settings panel lists what this deployment has configured.
 
 ## Configuration
 
@@ -55,7 +55,7 @@ Names only; see [.env.example](.env.example) for descriptions. Secrets stay on t
 | `HELIUS_API_KEY` | Privacy Rings indexer and prover access; Helius RPC | unset: private balances off |
 | `SPR_INDEXER_URL_DEVNET`, `SPR_PROVER_URL_DEVNET`, `SPR_INDEXER_URL_MAINNET`, `SPR_PROVER_URL_MAINNET`, `SPR_POLICY_BASE` | Privacy Rings service endpoints | values published in the SDK README |
 | `SPR_MAINNET_ENABLED` | Allow mainnet private balances | `false` |
-| `PYTH_API_KEY`, `PYTH_HERMES_BASE` | Independent price check for borrowing | unset: check reported as unavailable |
+| `PYTH_API_KEY`, `PYTH_HERMES_BASE` | Optional: Pyth prices from Hermes instead of on-chain feeds | unset: on-chain feeds via the RPC |
 | `NOCT_ALLOWED_ORIGINS` | Extra origins allowed to call write endpoints | same origin only |
 | `NOCT_ICON_HOSTS` | Extra hosts the token-icon proxy may fetch | built-in allowlist |
 | `NOCT_SILENT_LOGS` | `1` silences operational logs | logs on |
