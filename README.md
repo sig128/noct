@@ -57,7 +57,7 @@ Names only; see [.env.example](.env.example) for descriptions. Secrets stay on t
 | `SPR_MAINNET_ENABLED` | Operator switch for private balances | `false` (off) |
 | `PYTH_API_KEY`, `PYTH_HERMES_BASE` | Optional: Pyth prices from Hermes instead of on-chain feeds | unset: on-chain feeds via the RPC |
 | `NOCT_ALLOWED_ORIGINS` | Extra origins allowed to call write endpoints | same origin only |
-| `NOCT_ICON_HOSTS` | Extra hosts the token-icon proxy may fetch | built-in allowlist |
+| `NOCT_ICON_HOSTS` | Extra hosts the icon proxy may fetch directly when the image service is down | built-in allowlist |
 | `NOCT_SILENT_LOGS` | `1` silences operational logs | logs on |
 | `NOCT_DIST_DIR` | Alternative build directory | `.next` |
 

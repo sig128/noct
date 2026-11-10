@@ -18,6 +18,12 @@ No upstream source commits are pinned. Code dependencies are pinned by exact ver
 | Solana JSON-RPC | standard methods (allowlisted) | mainnet | Balances, mint accounts, simulation, submission, status | Implemented; fixture-tested |
 | Wallet Standard | `@wallet-standard/app` 1.1.1, `@solana/wallet-standard-features` 1.5.0 | n/a | Connect, sign transaction, sign derivation message | Implemented; tested with an injected QA wallet only |
 
+## Token icons
+
+- Icon URLs from token metadata are accepted from any public HTTPS host (no credentials, ports, IP literals or local names); IPFS links on any gateway, or `ipfs://`, are moved onto `ipfs.io`, because several gateways older metadata names no longer serve.
+- `/api/token-icon` fetches them through the image service **wsrv.nl** (`?url=…&w=96&h=96&fit=cover&output=webp`), which turns SVG and other formats into a small raster and caches it. If the service fails, allowlisted hosts (`DEFAULT_ICON_HOSTS` plus `NOCT_ICON_HOSTS`) are fetched directly, following at most three redirects that stay on the allowlist.
+- Only PNG, JPEG, GIF or WebP bytes, checked by magic bytes, are served, with a one-day browser cache and a seven-day CDN cache. A user's IP never reaches the icon hosts or the service; wsrv.nl sees which icons the server asks for.
+
 ## Jupiter Swap API v2
 
 - Base: `JUPITER_API_BASE` (default `https://api.jup.ag`). Optional `JUPITER_API_KEY` is added server-side as `x-api-key`. Without a key the keyless tier applies, with a low rate limit.
@@ -32,7 +38,7 @@ No upstream source commits are pinned. Code dependencies are pinned by exact ver
 ## Jupiter Tokens v2 and Price v3
 
 - `GET /tokens/v2/search?query=` for text search; a comma-separated mint list performs exact lookups. Fields used: id, name, symbol, icon, decimals, tokenProgram, verification, organic score, holder count, liquidity, audit flags, mint and freeze authority, launchpad, creation time.
-- All metadata is treated as untrusted: names and symbols are stripped of bidirectional and zero-width characters and length-bounded; icons load only through `/api/token-icon` from an allowlist of hosts with content-type and magic-byte checks.
+- All metadata is treated as untrusted: names and symbols are stripped of bidirectional and zero-width characters and length-bounded; icons load only through `/api/token-icon` (see "Token icons" below).
 - `GET /price/v3?ids=` (up to 50 mints) for USD display. Prices never feed a transaction amount.
 
 ## Jupiter Lend (beta)

@@ -33,7 +33,7 @@ export function shortAddress(address: string, head = 4, tail = 4): string {
   return `${address.slice(0, head)}…${address.slice(-tail)}`;
 }
 
-/** Hosts whose images the server-side icon proxy may fetch. */
+/** Hosts the icon proxy may fetch from directly when the image service is unavailable. */
 export const DEFAULT_ICON_HOSTS = [
   "raw.githubusercontent.com",
   "arweave.net",
@@ -44,6 +44,7 @@ export const DEFAULT_ICON_HOSTS = [
   "img-v1.raydium.io",
   "img.fotofolio.xyz",
   "metadata.jito.network",
+  "storage.googleapis.com",
   "assets.coingecko.com",
   "coin-images.coingecko.com",
   "shdw-drive.genesysgo.net",
@@ -67,8 +68,48 @@ export function isAllowedIconUrl(raw: unknown, hosts: readonly string[] = DEFAUL
   return allowed ? url : null;
 }
 
-/** Same-origin proxy URL for a provider icon, or null when the host is not allowlisted. */
-export function proxiedIconUrl(raw: unknown, hosts?: readonly string[]): string | null {
-  const url = isAllowedIconUrl(raw, hosts);
+const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
+/** CIDv0 (base58, "Qm…") or CIDv1 in base32 ("baf…"), the forms gateways use. */
+const CID = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{50,})$/;
+
+function ipfsUrl(cid: string, path: string): URL {
+  return new URL(`${IPFS_GATEWAY}${cid}${path && path !== "/" ? path : ""}`);
+}
+
+/**
+ * The icon URL a token's metadata names, made safe to request from the
+ * server: https only, no credentials or ports, a public host name (no IP
+ * literals or local names). IPFS content is moved onto one public gateway,
+ * since several gateways token metadata still points at no longer serve.
+ */
+export function normalizeIconUrl(raw: unknown): URL | null {
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  if (text.length === 0 || text.length > 600) return null;
+  if (text.toLowerCase().startsWith("ipfs://")) {
+    const rest = text.slice(7).replace(/^ipfs\//i, "");
+    const slash = rest.indexOf("/");
+    const cid = slash < 0 ? rest : rest.slice(0, slash);
+    return CID.test(cid) ? ipfsUrl(cid, slash < 0 ? "" : rest.slice(slash)) : null;
+  }
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+  const host = url.hostname.toLowerCase();
+  if (!host.includes(".") || host.startsWith("[") || /^[\d.]+$/.test(host) || /(^|\.)(localhost|local|internal|lan|home)$/.test(host)) return null;
+  const subdomain = host.match(/^([a-z0-9]+)\.ipfs\.[a-z0-9.-]+$/);
+  if (subdomain && CID.test(subdomain[1]!)) return ipfsUrl(subdomain[1]!, url.pathname);
+  const pathGateway = url.pathname.match(/^\/ipfs\/([A-Za-z0-9]+)(\/.*)?$/);
+  if (pathGateway && CID.test(pathGateway[1]!)) return ipfsUrl(pathGateway[1]!, pathGateway[2] ?? "");
+  return url;
+}
+
+/** Same-origin proxy URL for a token icon, or null when the metadata names none usable. */
+export function proxiedIconUrl(raw: unknown): string | null {
+  const url = normalizeIconUrl(raw);
   return url ? `/api/token-icon?u=${encodeURIComponent(url.toString())}` : null;
 }

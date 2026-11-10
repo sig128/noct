@@ -20,7 +20,7 @@ describe("secret and private data never reach logs", () => {
 });
 
 describe("token metadata mapping", () => {
-  it("sanitises names, proxies only allowlisted icons and keeps the exact mint", () => {
+  it("sanitises names, proxies icons from public https hosts and keeps the exact mint", () => {
     const raw = mintInformationSchema.parse({
       id: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
       name: "Bonk‮​",
@@ -36,7 +36,9 @@ describe("token metadata mapping", () => {
     });
     const t = toTokenInfo(raw);
     expect(t.name).toBe("Bonk");
-    expect(t.icon).toBeNull();
+    // Any public https host is served, through the image proxy; unsafe URLs are dropped.
+    expect(t.icon).toBe("/api/token-icon?u=https%3A%2F%2Fevil.example%2Fpixel.png");
+    expect(toTokenInfo({ ...raw, icon: "http://evil.example/pixel.png" }).icon).toBeNull();
     expect(t.mint).toBe("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263");
     expect(t.usdPrice).toBe("0.00001083");
     expect(t.tokenProgram).toBe("spl");

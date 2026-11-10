@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { annotateIdentity, rankTokens, skeletonTicker } from "@/lib/tokens/identity";
 import { assessTokenRisk } from "@/lib/tokens/risk";
-import { isAllowedIconUrl, sanitizeName, sanitizeSymbol, sanitizeText } from "@/lib/tokens/sanitize";
+import { isAllowedIconUrl, normalizeIconUrl, proxiedIconUrl, sanitizeName, sanitizeSymbol, sanitizeText } from "@/lib/tokens/sanitize";
 import { NATIVE_SOL_MINT, type TokenInfo } from "@/lib/tokens/types";
 
 const base: TokenInfo = {
@@ -53,6 +53,21 @@ describe("untrusted metadata", () => {
     expect(isAllowedIconUrl("https://user:pw@arweave.net/x")).toBeNull();
     expect(isAllowedIconUrl("https://arweave.net.evil.example/x")).toBeNull();
     expect(isAllowedIconUrl("javascript:alert(1)")).toBeNull();
+  });
+  it("accepts icons from any public https host, through the same-origin proxy", () => {
+    expect(proxiedIconUrl("https://cdn.example.org/coin.png")).toBe("/api/token-icon?u=https%3A%2F%2Fcdn.example.org%2Fcoin.png");
+    for (const bad of ["http://cdn.example.org/a.png", "https://user:pw@cdn.example.org/a.png", "https://cdn.example.org:8443/a.png", "https://127.0.0.1/a.png", "https://2130706433/a.png", "https://[::1]/a.png", "https://localhost/a.png", "https://printer.local/a.png", "https://intranet/a.png", "data:image/png;base64,AAAA", `https://cdn.example.org/${"a".repeat(600)}`]) {
+      expect(normalizeIconUrl(bad), bad).toBeNull();
+    }
+  });
+  it("moves IPFS content onto one public gateway", () => {
+    const v1 = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
+    const v0 = "QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX";
+    expect(normalizeIconUrl(`https://${v1}.ipfs.nftstorage.link/`)?.toString()).toBe(`https://ipfs.io/ipfs/${v1}`);
+    expect(normalizeIconUrl(`https://gateway.pinata.cloud/ipfs/${v0}/logo.png`)?.toString()).toBe(`https://ipfs.io/ipfs/${v0}/logo.png`);
+    expect(normalizeIconUrl(`ipfs://${v0}`)?.toString()).toBe(`https://ipfs.io/ipfs/${v0}`);
+    expect(normalizeIconUrl(`ipfs://ipfs/${v1}/a.png`)?.toString()).toBe(`https://ipfs.io/ipfs/${v1}/a.png`);
+    expect(normalizeIconUrl("ipfs://not-a-cid")).toBeNull();
   });
 });
 

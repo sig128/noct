@@ -28,7 +28,7 @@ export function toTokenInfo(raw: z.infer<typeof mintInformationSchema>): TokenIn
     symbol: sanitizeSymbol(raw.symbol),
     name: sanitizeName(raw.name),
     decimals: raw.decimals,
-    icon: proxiedIconUrl(raw.icon, iconHosts()),
+    icon: proxiedIconUrl(raw.icon),
     tokenProgram: program,
     tokenProgramId: raw.tokenProgram ?? null,
     verified: raw.isVerified === true,
