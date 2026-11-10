@@ -130,7 +130,7 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
               recipient: address,
               requestedPrivacy: "confidential_transfer",
               title: `Move ${inSym} out of your private balance`,
-              notice: `This swap runs in three steps you sign one by one: ${inSym} moves to your public wallet, Jupiter swaps it, and the ${outSym} moves back into your private balance. Each step shows on chain with its token and amount, and the three can be linked. Only your balance is hidden again afterwards.`,
+              notice: `This swap is not private. It runs in three public steps you sign one by one: ${inSym} moves out of your private balance to your wallet, Jupiter swaps it from your wallet, and the ${outSym} moves back in. Anyone can see your wallet, the tokens and the amounts in each step and link the three. Only what stays in your private balance is hidden afterwards.`,
               onSettled: refetch,
             }),
         },
@@ -198,7 +198,7 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
     else if (privateInput !== null && amount > privateInput) action = { label: `Not enough ${input.symbol} in your private balance`, disabled: true };
     else if (outputHoldBlocked) action = { label: `${output.symbol} can't be held privately`, disabled: true, hint: "This token's Token-2022 settings block private holding." };
     else if (publicSol !== null && publicSol < MIN_FEE_LAMPORTS) action = { label: "Add a little SOL for fees", disabled: true, hint: "Your public wallet pays the network fee for each of the three steps." };
-    else action = quoteGate() ?? { label: "Review private-balance swap", disabled: flowOpen, onClick: startPrivateSwap };
+    else action = quoteGate() ?? { label: "Review public swap with private funds", disabled: flowOpen, onClick: startPrivateSwap };
   } else if (insufficient) action = { label: `Insufficient ${input.symbol}`, disabled: true, hint: input.mint === NATIVE_SOL_MINT ? "Keeps SOL back for fees and account rent." : undefined };
   else
     action = quoteGate() ?? {
@@ -267,7 +267,7 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
             }}
           >
             <Icon name={requestedPrivacy === "public" ? "globe" : "rosette"} size={15} />
-            {requestedPrivacy === "public" ? "Public wallet" : "Private balance"}
+            {requestedPrivacy === "public" ? "Public wallet" : "Private funds"}
             <Icon name="chevronDown" size={13} />
           </button>
           <button
@@ -427,8 +427,8 @@ function ModePopover({ value, onChange, onClose, privateStatus }: { value: Priva
     { value: "public", label: "Public wallet", desc: "Your wallet signs a Jupiter swap. Everything about it is public." },
     {
       value: "confidential_transfer",
-      label: "Private balance",
-      desc: `Pays from your private balance and puts what you buy back into it, in three signed steps. The trade itself is public.${privateStatus === "ready" ? "" : " Unlock your private balance first."}`,
+      label: "Private funds",
+      desc: `Not a private swap. Moves the tokens out of your private balance to your wallet, swaps them publicly on Jupiter and moves what you buy back in. All three steps show your wallet, the tokens and the amounts, and can be linked.${privateStatus === "ready" ? "" : " Unlock your private balance first."}`,
     },
   ];
   return (

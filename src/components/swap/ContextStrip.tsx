@@ -2,14 +2,13 @@
 
 import { formatUsdPrice, parseDecimalRatio } from "@/lib/decimal";
 import { usePrices } from "@/lib/client/hooks";
-import { usePrivate, useSwapDraft } from "@/lib/client/stores";
+import { useSwapDraft } from "@/lib/client/stores";
 import styles from "./swap.module.css";
 
 /** Compact market and privacy context under the swap card. */
 export function ContextStrip() {
   const input = useSwapDraft((s) => s.input);
   const requested = useSwapDraft((s) => s.requestedPrivacy);
-  const privateStatus = usePrivate((s) => s.status);
   const prices = usePrices([input?.mint]);
   const price = input ? prices.data?.[input.mint]?.usdPrice : undefined;
   const ratio = price ? parseDecimalRatio(price) : null;
@@ -25,7 +24,7 @@ export function ContextStrip() {
       </div>
       <div className={styles.cell}>
         <span className={styles.cellLabel}>Privacy</span>
-        <span className={styles.cellValue} style={{ color: requested === "public" ? undefined : "var(--private)" }} title={privateStatus === "ready" ? "Swaps execute publicly. Your private balance is open in this tab." : undefined}>
+        <span className={styles.cellValue} style={{ color: requested === "public" ? undefined : "var(--warn)" }} title="Swaps are public on chain, including swaps with private funds.">
           {requested === "public" ? "Public execution" : "Public trade"}
         </span>
       </div>
