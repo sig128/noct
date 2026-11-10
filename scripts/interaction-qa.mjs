@@ -102,11 +102,12 @@ await check("landing: Launch app glides the ring into place, opens the swap and 
   assert((await page.getByRole("link", { name: "Launch app" }).count()) === 0, "the landing is still mounted");
   const placed = await page.evaluate(() => {
     const box = document.querySelector('[data-ring="stage"] > div')?.getBoundingClientRect();
-    const anchor = document.querySelector("[data-ring-anchor]")?.getBoundingClientRect();
-    if (!box || !anchor) return null;
-    return { dx: Math.abs(box.left + box.width / 2 - (anchor.left + anchor.width / 2)), dy: Math.abs(box.top + box.height / 2 - (anchor.top + anchor.height / 2)), dw: Math.abs(box.width - anchor.width) };
+    const centre = document.querySelector("[data-ring-center]")?.getBoundingClientRect();
+    const size = document.querySelector("[data-ring-anchor]")?.getBoundingClientRect();
+    if (!box || !centre || !size) return null;
+    return { dx: Math.abs(box.left + box.width / 2 - (centre.left + centre.width / 2)), dy: Math.abs(box.top + box.height / 2 - (centre.top + centre.height / 2)), dw: Math.abs(box.width - size.width) };
   });
-  assert(placed && placed.dx < 3 && placed.dy < 3 && placed.dw < 3, `ring not at its place in the app: ${JSON.stringify(placed)}`);
+  assert(placed && placed.dx < 3 && placed.dy < 3 && placed.dw < 3, `ring not centred behind the swap: ${JSON.stringify(placed)}`);
   await page.goBack();
   await page.waitForURL(BASE + "/");
   await page.getByRole("link", { name: "Launch app" }).waitFor({ timeout: 3000 });

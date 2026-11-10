@@ -61,7 +61,7 @@ export function AppShell() {
         </a>
         <TopBar />
         <main className={styles.workspace}>
-          <div className={styles.swapColumn}>
+          <div className={styles.swapColumn} data-ring-center>
             <SwapCard headingLevel={module === "swap" ? 1 : 2} />
             <ContextStrip />
           </div>

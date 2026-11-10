@@ -199,10 +199,13 @@
 
 /* ------------------------------------------------------------ workspace */
 
+/* The swap and its context (token facts or a tool, at most 600 px wide) sit
+   together in the middle of the space between the edge and the rail. */
 .workspace {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(380px, 452px) minmax(0, 1fr);
+  grid-template-columns: minmax(380px, 452px) minmax(0, 600px);
+  justify-content: center;
   column-gap: clamp(32px, 5vw, 80px);
   align-items: start;
   padding: clamp(20px, 5.5vh, 64px) calc(var(--rail-w) + var(--rail-inset) + 28px) 56px var(--gutter);
@@ -231,7 +234,7 @@
 @media (max-width: 1179px) {
   .workspace {
     grid-template-columns: minmax(0, 480px);
-    justify-content: start;
+    justify-content: center;
     row-gap: 18px;
   }
   .contextColumn {
@@ -561,7 +564,8 @@
   align-items: flex-start;
 }
 
-/* Where the ring sits beside the swap. Empty: RingStage measures it and draws the ring there. */
+/* The ring's size in the app (and its opacity, through --ambient-max). Empty: RingStage
+   reads this box's width and draws the ring that size, centred behind the swap. */
 .ambientLayer {
   position: fixed;
   inset: 0;
@@ -572,15 +576,14 @@
 
 .ambientArt {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: clamp(540px, 74vmin, 820px);
+  right: 0;
+  bottom: 0;
+  width: clamp(760px, 112vmin, 1240px);
   aspect-ratio: 1;
 }
 
 @media (max-width: 1179px) {
   .ambientArt {
-    translate: 24% 16%;
     --ambient-max: 0.6;
   }
 }
