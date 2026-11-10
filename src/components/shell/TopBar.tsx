@@ -49,7 +49,7 @@ export function TopBar() {
       <div className={styles.brand}>
         <Link href="/swap" className={styles.wordmark} aria-label="noct, swap">
           <span data-ring-home style={{ display: "inline-flex" }}>
-            <MoonMark size={24} />
+            <MoonMark size={22} />
           </span>
           <span className={styles.wordmarkText}>noct</span>
         </Link>

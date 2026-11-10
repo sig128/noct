@@ -4,7 +4,7 @@ As of 2026-11-10. Five categories, from strongest evidence to none. "Fixtures" m
 
 ## 1. Verified in this build
 
-Evidence: `npm run typecheck` (strict), 134 Vitest tests in 12 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
+Evidence: `npm run typecheck` (strict), 132 Vitest tests in 11 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
 
 | Area | What was verified |
 | --- | --- |
