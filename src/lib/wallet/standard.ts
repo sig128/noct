@@ -17,6 +17,7 @@ import {
   type SolanaSignTransactionFeature,
 } from "@solana/wallet-standard-features";
 import type { Network } from "@/lib/operations/intent";
+import { sanitizeText } from "@/lib/tokens/sanitize";
 
 export type SolanaChain = "solana:mainnet";
 
@@ -87,6 +88,26 @@ function isUserRejection(error: unknown): boolean {
   return e?.code === 4001 || /reject|denied|cancel|declin/i.test(`${e?.name ?? ""} ${e?.message ?? ""}`);
 }
 
+/** The wallet's own words for a failure, made safe to show: one line of plain text, bounded. */
+export function walletReason(error: unknown): string {
+  const e = error as { message?: unknown } | null;
+  return sanitizeText(typeof e?.message === "string" ? e.message : typeof error === "string" ? error : "", 160);
+}
+
+function failure(what: string, error: unknown): WalletActionError {
+  const reason = walletReason(error);
+  if (!reason) return new WalletActionError("failed", what);
+  return new WalletActionError("failed", `${what} The wallet said: ${/[.!?…]$/.test(reason) ? reason : `${reason}.`}`);
+}
+
+/**
+ * The wallet's current object for this account. Wallets replace account
+ * objects when their state changes, and some refuse a stale one.
+ */
+export function liveAccount(option: WalletOption, account: WalletAccount): WalletAccount {
+  return option.wallet.accounts?.find((a) => a.address === account.address) ?? account;
+}
+
 export async function connectWallet(option: WalletOption, network: Network): Promise<WalletAccount> {
   const connect = features(option.wallet)[StandardConnect];
   if (!connect) throw new WalletActionError("unsupported", `${option.name} does not support connecting.`);
@@ -124,13 +145,13 @@ export async function signTransaction(option: WalletOption, account: WalletAccou
   const signer = features(option.wallet)[SolanaSignTransaction];
   if (!signer) throw new WalletActionError("unsupported", `${option.name} cannot sign transactions.`);
   try {
-    const [out] = await signer.signTransaction({ account, transaction, chain: chainFor(network) });
+    const [out] = await signer.signTransaction({ account: liveAccount(option, account), transaction, chain: chainFor(network) });
     if (!out) throw new WalletActionError("failed", "The wallet returned no signed transaction.");
     return new Uint8Array(out.signedTransaction);
   } catch (error) {
     if (error instanceof WalletActionError) throw error;
     if (isUserRejection(error)) throw new WalletActionError("rejected", "Signature declined in the wallet. Nothing was sent.");
-    throw new WalletActionError("failed", "The wallet could not sign this transaction.");
+    throw failure(`${option.name} could not sign this transaction.`, error);
   }
 }
 
@@ -139,7 +160,7 @@ export async function signExactMessage(option: WalletOption, account: WalletAcco
   const signer = features(option.wallet)[SolanaSignMessage];
   if (!signer) throw new WalletActionError("unsupported", `${option.name} cannot sign messages.`);
   try {
-    const [out] = await signer.signMessage({ account, message });
+    const [out] = await signer.signMessage({ account: liveAccount(option, account), message });
     if (!out) throw new WalletActionError("failed", "The wallet returned no signature.");
     const signed = new Uint8Array(out.signedMessage);
     if (signed.length !== message.length || signed.some((b, i) => b !== message[i])) {
@@ -149,6 +170,6 @@ export async function signExactMessage(option: WalletOption, account: WalletAcco
   } catch (error) {
     if (error instanceof WalletActionError) throw error;
     if (isUserRejection(error)) throw new WalletActionError("rejected", "Signature declined in the wallet.");
-    throw new WalletActionError("failed", "The wallet could not sign the message.");
+    throw failure(`${option.name} could not sign the message.`, error);
   }
 }

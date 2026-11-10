@@ -33,6 +33,9 @@ export async function connect(option: WalletOption): Promise<void> {
       } else if (next.address !== current.address) {
         invalidateSession("Your wallet switched accounts. Unlock again for the new account.");
         useWallet.getState().set({ account: next, address: next.address });
+      } else if (next !== current.account) {
+        // Same account in a new object: keep the wallet's current one for signing.
+        useWallet.getState().set({ account: next });
       }
     });
     if (w.address && w.address !== account.address) invalidateSession("A different wallet account connected.");
