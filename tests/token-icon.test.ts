@@ -1,9 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { createHash } from "node:crypto";
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const WEBP = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0, 0]);
 const SVG = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+
+/** The raw-codec CIDv1 of some bytes, as IPFS writes it. */
+function rawCid(bytes: Uint8Array): string {
+  const all = Uint8Array.from([0x01, 0x55, 0x12, 0x20, ...createHash("sha256").update(bytes).digest()]);
+  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+  let out = "b";
+  let bits = 0;
+  let value = 0;
+  for (const byte of all) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += alphabet[(value >>> bits) & 31];
+    }
+    value &= (1 << bits) - 1;
+  }
+  return bits > 0 ? out + alphabet[(value << (5 - bits)) & 31] : out;
+}
 
 type Handler = (url: URL, init?: RequestInit) => Response | Promise<Response>;
 
@@ -107,6 +127,17 @@ describe("token icon proxy", () => {
     expect(Date.now() - startedAt).toBeLessThan(3_000);
     expect(calls).toHaveLength(2);
     expect(stopped).toBe(true);
+  });
+
+  it("takes a single-block IPFS icon from the trustless gateway, only when it hashes to its content id", async () => {
+    const cid = rawCid(PNG);
+    const ok = await getIcon(`https://ipfs.io/ipfs/${cid}`, (url) => (url.hostname === "trustless-gateway.link" ? new Response(PNG, { status: 200 }) : new Response(null, { status: 429 })));
+    expect(ok.res.status).toBe(200);
+    expect(ok.res.headers.get("content-type")).toBe("image/png");
+    expect(ok.calls).toContain(`https://trustless-gateway.link/ipfs/${cid}?format=raw`);
+
+    const swapped = await getIcon(`https://ipfs.io/ipfs/${cid}`, (url) => (url.hostname === "trustless-gateway.link" ? new Response(WEBP, { status: 200 }) : new Response(null, { status: 429 })));
+    expect(swapped.res.status).toBe(404);
   });
 
   it("refuses unsafe sources before any request", async () => {

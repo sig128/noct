@@ -86,6 +86,33 @@ export function ipfsContent(url: URL): { cid: string; path: string } | null {
   return null;
 }
 
+const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+
+/**
+ * The sha2-256 digest a raw-codec CIDv1 ("bafkrei…") commits to, or null for
+ * any other kind of CID. Content fetched for such a CID is checked against it.
+ */
+export function rawBlockDigest(cid: string): Uint8Array | null {
+  if (!cid.startsWith("b")) return null;
+  const out: number[] = [];
+  let bits = 0;
+  let value = 0;
+  for (const ch of cid.slice(1)) {
+    const i = BASE32.indexOf(ch);
+    if (i < 0) return null;
+    value = (value << 5) | i;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push((value >>> bits) & 0xff);
+      value &= (1 << bits) - 1;
+    }
+  }
+  // CIDv1, raw codec (0x55), sha2-256 multihash (0x12) of 32 bytes.
+  if (out.length !== 36 || out[0] !== 0x01 || out[1] !== 0x55 || out[2] !== 0x12 || out[3] !== 0x20) return null;
+  return Uint8Array.from(out.slice(4));
+}
+
 /**
  * Where an icon can be fetched from, best first: the URL itself, then, for
  * IPFS content, other public gateways (several that older token metadata

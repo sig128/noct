@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { rateLimit } from "@/lib/server/guard";
-import { iconCandidates, iconSpelling, isAllowedIconUrl, normalizeIconUrl } from "@/lib/tokens/sanitize";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { iconCandidates, iconSpelling, ipfsContent, isAllowedIconUrl, normalizeIconUrl, rawBlockDigest } from "@/lib/tokens/sanitize";
 import { iconHosts } from "@/lib/server/jupiter";
 import { log } from "@/lib/server/log";
 
@@ -18,6 +19,14 @@ const SERVICE_HOSTS = new Set(["wsrv.nl", "images.weserv.nl"]);
  */
 const HELIUS_CDN = "https://cdn.helius-rpc.com/cdn-cgi/image//";
 const HELIUS_CDN_HOST = "cdn.helius-rpc.com";
+/**
+ * IPFS's trustless gateway: it returns content blocks, which are checked
+ * against the content id here, so the gateway does not have to be trusted.
+ * Used for single-block (raw) IPFS icons.
+ */
+const TRUSTLESS_GATEWAY = "https://trustless-gateway.link/ipfs/";
+const TRUSTLESS_HOST = "trustless-gateway.link";
+const IMAGE_ACCEPT = "image/webp,image/png,image/jpeg,image/gif";
 /** The longest one icon request may take, so a slow source never holds it for long. */
 const BUDGET_MS = 9_000;
 /** How long a single attempt may take. */
@@ -39,15 +48,15 @@ function sniff(bytes: Uint8Array): string | null {
 }
 
 /**
- * Fetches an image, following at most three redirects and only to hosts
- * `allowHost` accepts. Returns raster bytes (checked by magic bytes) or why not.
+ * Fetches a response body of at most MAX_BYTES, following at most three
+ * redirects and only to hosts `allowHost` accepts. Returns the bytes or why not.
  */
-async function fetchImage(start: URL, allowHost: (host: string) => boolean, signal: AbortSignal): Promise<Outcome> {
+async function fetchBytes(start: URL, allowHost: (host: string) => boolean, signal: AbortSignal, accept: string): Promise<Uint8Array<ArrayBuffer> | string> {
   const limit = AbortSignal.any([signal, AbortSignal.timeout(ATTEMPT_MS)]);
   try {
     let url = start;
     for (let hop = 0; hop <= 3; hop += 1) {
-      const res = await fetch(url, { signal: limit, redirect: "manual", headers: { accept: "image/webp,image/png,image/jpeg,image/gif" } });
+      const res = await fetch(url, { signal: limit, redirect: "manual", headers: { accept } });
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get("location");
         if (!location) return `${res.status} without location`;
@@ -79,13 +88,32 @@ async function fetchImage(start: URL, allowHost: (host: string) => boolean, sign
         bytes.set(c, offset);
         offset += c.byteLength;
       }
-      const type = sniff(bytes);
-      return type ? { bytes, type } : "not a raster image";
+      return bytes;
     }
     return "too many redirects";
   } catch {
     return signal.aborted ? "stopped" : limit.aborted ? "timed out" : "network error";
   }
+}
+
+function asImage(bytes: Uint8Array<ArrayBuffer> | string): Outcome {
+  if (typeof bytes === "string") return bytes;
+  const type = sniff(bytes);
+  return type ? { bytes, type } : "not a raster image";
+}
+
+/** An image (raster, checked by magic bytes) or why not. */
+async function fetchImage(start: URL, allowHost: (host: string) => boolean, signal: AbortSignal): Promise<Outcome> {
+  return asImage(await fetchBytes(start, allowHost, signal, IMAGE_ACCEPT));
+}
+
+/** A single-block IPFS file from the trustless gateway, accepted only if it hashes to its content id. */
+async function fetchVerifiedBlock(cid: string, digest: Uint8Array, signal: AbortSignal): Promise<Outcome> {
+  const bytes = await fetchBytes(new URL(`${TRUSTLESS_GATEWAY}${cid}?format=raw`), (host) => host === TRUSTLESS_HOST, signal, "application/vnd.ipld.raw");
+  if (typeof bytes === "string") return bytes;
+  const actual = createHash("sha256").update(bytes).digest();
+  if (actual.byteLength !== digest.byteLength || !timingSafeEqual(actual, digest)) return "content does not match its id";
+  return asImage(bytes);
 }
 
 /**
@@ -150,7 +178,8 @@ function shortHost(url: URL): string {
  * named in token metadata. Icons go through an image service (wsrv.nl), which
  * fetches any public https host, turns SVG and other formats into a small
  * raster and caches it; only raster bytes come back. When that fails, the
- * icon is taken from Helius's image cache, then (for IPFS) from other public
+ * icon is taken from Helius's image cache, then (for IPFS) from the trustless
+ * gateway with the content checked against its id, then from other public
  * gateways, then directly from allowlisted hosts. Nothing but PNG, JPEG, GIF
  * or WebP (checked by magic bytes) is ever served.
  */
@@ -164,6 +193,8 @@ export async function GET(req: NextRequest) {
   const candidates = iconCandidates(source).slice(0, 4);
   const [named, ...gateways] = candidates;
   const cached = new URL(`${HELIUS_CDN}${iconSpelling(raw, source)}`);
+  const ipfs = ipfsContent(source);
+  const digest = ipfs && (ipfs.path === "" || ipfs.path === "/") ? rawBlockDigest(ipfs.cid) : null;
   const hosts = iconHosts();
   const onAllowlist = (host: string) => isAllowedIconUrl(`https://${host}/`, hosts) !== null;
   const failures: string[] = [];
@@ -185,6 +216,7 @@ export async function GET(req: NextRequest) {
     resized(shortHost(named!), named!),
     // The image service cannot fetch the cache's URLs, so it is asked directly.
     attempt("helius cdn", (signal) => fetchImage(cached, (host) => host === HELIUS_CDN_HOST, signal)),
+    ...(ipfs && digest ? [attempt("trustless gateway", (signal) => fetchVerifiedBlock(ipfs.cid, digest, signal))] : []),
     ...gateways.map((c) => resized(shortHost(c), c)),
     ...candidates.filter((c) => onAllowlist(c.hostname)).map((c) => attempt(`direct ${shortHost(c)}`, (signal) => fetchImage(c, onAllowlist, signal))),
   ];

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { annotateIdentity, rankTokens, skeletonTicker } from "@/lib/tokens/identity";
 import { assessTokenRisk } from "@/lib/tokens/risk";
-import { iconCandidates, isAllowedIconUrl, normalizeIconUrl, proxiedIconUrl, sanitizeName, sanitizeSymbol, sanitizeText } from "@/lib/tokens/sanitize";
+import { iconCandidates, isAllowedIconUrl, normalizeIconUrl, proxiedIconUrl, rawBlockDigest, sanitizeName, sanitizeSymbol, sanitizeText } from "@/lib/tokens/sanitize";
+import { createHash } from "node:crypto";
 import { NATIVE_SOL_MINT, type TokenInfo } from "@/lib/tokens/types";
 
 const base: TokenInfo = {
@@ -64,6 +65,14 @@ describe("untrusted metadata", () => {
       expect(normalizeIconUrl(bad), bad).toBeNull();
     }
   });
+  it("reads the sha2-256 digest a raw-codec CID commits to, and nothing from other CIDs", () => {
+    // The CID of empty content.
+    expect(Buffer.from(rawBlockDigest("bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku")!).toString("hex")).toBe(createHash("sha256").update("").digest("hex"));
+    expect(rawBlockDigest("QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX")).toBeNull();
+    expect(rawBlockDigest("bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")).toBeNull();
+    expect(rawBlockDigest("bafkrei!!")).toBeNull();
+  });
+
   it("tries IPFS icons on other public gateways after the one the metadata names", () => {
     const v1 = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
     const v0 = "QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX";
