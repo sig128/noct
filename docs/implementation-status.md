@@ -4,12 +4,12 @@ As of 2026-11-10. Five categories, from strongest evidence to none. "Fixtures" m
 
 ## 1. Verified in this build
 
-Evidence: `npm run typecheck` (strict), 139 Vitest tests in 12 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
+Evidence: `npm run typecheck` (strict), 141 Vitest tests in 12 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
 
 | Area | What was verified |
 | --- | --- |
 | Amount math | Base-unit parsing and formatting up to 24 decimals and u64 max, no rounding up, input normalisation, floor/ceil helpers, exact rational prices, MAX that keeps SOL for fees and rent and solves for input-side Token-2022 fees |
-| Token safety | Metadata sanitising, icon proxy (public HTTPS hosts through an image service, IPFS links moved to one gateway, redirects kept on the allowlist, raster only), impostor ticker detection (Cyrillic, digit, lowercase-l lookalikes), risk notes, mint-account parsing for SPL and Token-2022 extensions, transfer-fee epochs |
+| Token safety | Metadata sanitising, icon proxy (public HTTPS hosts through an image service, IPFS icons tried on other public gateways when the named one fails or is slow, redirects kept on the allowlist, raster only), impostor ticker detection (Cyrillic, digit, lowercase-l lookalikes), risk notes, mint-account parsing for SPL and Token-2022 extensions, transfer-fee epochs |
 | Quotes | Schema validation, staleness, latest-request-wins under races, results never shown for an earlier search or amount |
 | Intents | Digest binding of every material field; any change or expiry voids approval; assembled order re-checked against the intent |
 | Transaction checks | Decoding, version, fee payer, required signers and co-signers, program allowlist, garbage rejection (the order, execute, Earn and Borrow routes apply the same function; the routes themselves have no dedicated tests) |

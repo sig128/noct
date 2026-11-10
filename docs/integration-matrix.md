@@ -20,7 +20,7 @@ No upstream source commits are pinned. Code dependencies are pinned by exact ver
 
 ## Token icons
 
-- Icon URLs from token metadata are accepted from any public HTTPS host (no credentials, ports, IP literals or local names); IPFS links on any gateway, or `ipfs://`, are moved onto `ipfs.io`, because several gateways older metadata names no longer serve.
+- Icon URLs from token metadata are accepted from any public HTTPS host (no credentials, ports, IP literals or local names); IPFS icons are fetched from the gateway the metadata names and also from other public gateways (`ipfs.io`, `dweb.link`) when that one fails or is slow, because several gateways older metadata names no longer serve; `ipfs://` links go to `ipfs.io`.
 - `/api/token-icon` fetches them through the image service **wsrv.nl** (`?url=…&w=96&h=96&fit=cover&output=webp`), which turns SVG and other formats into a small raster and caches it. If the service fails, allowlisted hosts (`DEFAULT_ICON_HOSTS` plus `NOCT_ICON_HOSTS`) are fetched directly, following at most three redirects that stay on the allowlist.
 - Only PNG, JPEG, GIF or WebP bytes, checked by magic bytes, are served, with a one-day browser cache and a seven-day CDN cache. A user's IP never reaches the icon hosts or the service; wsrv.nl sees which icons the server asks for.
 

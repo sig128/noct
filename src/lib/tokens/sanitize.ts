@@ -68,19 +68,40 @@ export function isAllowedIconUrl(raw: unknown, hosts: readonly string[] = DEFAUL
   return allowed ? url : null;
 }
 
-const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
+/** Public IPFS gateways tried, in order, after the one the metadata names. */
+const IPFS_GATEWAYS = ["https://ipfs.io/ipfs/", "https://dweb.link/ipfs/", "https://w3s.link/ipfs/"];
 /** CIDv0 (base58, "Qm…") or CIDv1 in base32 ("baf…"), the forms gateways use. */
 const CID = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{50,})$/;
 
-function ipfsUrl(cid: string, path: string): URL {
-  return new URL(`${IPFS_GATEWAY}${cid}${path && path !== "/" ? path : ""}`);
+function ipfsUrl(gateway: string, cid: string, path: string): URL {
+  return new URL(`${gateway}${cid}${path && path !== "/" ? path : ""}`);
+}
+
+/** The IPFS content an https gateway URL points at, if it is one (subdomain or path form). */
+export function ipfsContent(url: URL): { cid: string; path: string } | null {
+  const subdomain = url.hostname.toLowerCase().match(/^([a-z0-9]+)\.ipfs\.[a-z0-9.-]+$/);
+  if (subdomain && CID.test(subdomain[1]!)) return { cid: subdomain[1]!, path: url.pathname };
+  const pathGateway = url.pathname.match(/^\/ipfs\/([A-Za-z0-9]+)(\/.*)?$/);
+  if (pathGateway && CID.test(pathGateway[1]!)) return { cid: pathGateway[1]!, path: pathGateway[2] ?? "" };
+  return null;
+}
+
+/**
+ * Where an icon can be fetched from, best first: the URL itself, then, for
+ * IPFS content, other public gateways (several that older token metadata
+ * names no longer serve).
+ */
+export function iconCandidates(url: URL): URL[] {
+  const ipfs = ipfsContent(url);
+  if (!ipfs) return [url];
+  const all = [url, ...IPFS_GATEWAYS.map((g) => ipfsUrl(g, ipfs.cid, ipfs.path))];
+  return all.filter((u, i) => all.findIndex((v) => v.toString() === u.toString()) === i);
 }
 
 /**
  * The icon URL a token's metadata names, made safe to request from the
  * server: https only, no credentials or ports, a public host name (no IP
- * literals or local names). IPFS content is moved onto one public gateway,
- * since several gateways token metadata still points at no longer serve.
+ * literals or local names). An ipfs:// link becomes an https gateway URL.
  */
 export function normalizeIconUrl(raw: unknown): URL | null {
   if (typeof raw !== "string") return null;
@@ -90,7 +111,7 @@ export function normalizeIconUrl(raw: unknown): URL | null {
     const rest = text.slice(7).replace(/^ipfs\//i, "");
     const slash = rest.indexOf("/");
     const cid = slash < 0 ? rest : rest.slice(0, slash);
-    return CID.test(cid) ? ipfsUrl(cid, slash < 0 ? "" : rest.slice(slash)) : null;
+    return CID.test(cid) ? ipfsUrl(IPFS_GATEWAYS[0]!, cid, slash < 0 ? "" : rest.slice(slash)) : null;
   }
   let url: URL;
   try {
@@ -101,10 +122,6 @@ export function normalizeIconUrl(raw: unknown): URL | null {
   if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
   const host = url.hostname.toLowerCase();
   if (!host.includes(".") || host.startsWith("[") || /^[\d.]+$/.test(host) || /(^|\.)(localhost|local|internal|lan|home)$/.test(host)) return null;
-  const subdomain = host.match(/^([a-z0-9]+)\.ipfs\.[a-z0-9.-]+$/);
-  if (subdomain && CID.test(subdomain[1]!)) return ipfsUrl(subdomain[1]!, url.pathname);
-  const pathGateway = url.pathname.match(/^\/ipfs\/([A-Za-z0-9]+)(\/.*)?$/);
-  if (pathGateway && CID.test(pathGateway[1]!)) return ipfsUrl(pathGateway[1]!, pathGateway[2] ?? "");
   return url;
 }
 

@@ -5,16 +5,16 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 const WEBP = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0, 0]);
 const SVG = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
 
-type Handler = (url: URL) => Response;
+type Handler = (url: URL, init?: RequestInit) => Response | Promise<Response>;
 
 async function getIcon(source: string, handler: Handler) {
   const calls: string[] = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: URL | string) => {
+    vi.fn(async (input: URL | string, init?: RequestInit) => {
       const url = new URL(String(input));
       calls.push(url.toString());
-      return handler(url);
+      return handler(url, init);
     }),
   );
   const { GET } = await import("@/app/api/token-icon/route");
@@ -62,6 +62,37 @@ describe("token icon proxy", () => {
     const { res, calls } = await getIcon("https://cdn.example.org/coin.png", () => new Response(null, { status: 503 }));
     expect(res.status).toBe(404);
     expect(calls.every((c) => new URL(c).hostname === "wsrv.nl")).toBe(true);
+  });
+
+  it("tries another IPFS gateway when the one the metadata names fails", async () => {
+    const cid = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
+    const { res, calls } = await getIcon(`https://${cid}.ipfs.nftstorage.link/`, (url) => {
+      const asked = url.searchParams.get("url") ?? "";
+      return url.hostname === "wsrv.nl" && asked.startsWith("https://ipfs.io/") ? new Response(WEBP, { status: 200 }) : new Response(null, { status: 404 });
+    });
+    expect(res.status).toBe(200);
+    expect(calls.map((c) => new URL(c).searchParams.get("url"))).toEqual([`https://${cid}.ipfs.nftstorage.link/`, `https://ipfs.io/ipfs/${cid}`]);
+  });
+
+  it("starts the next gateway while a slow one is still running, and stops the slow one once an icon arrives", async () => {
+    const cid = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
+    let stopped = false;
+    const startedAt = Date.now();
+    const { res, calls } = await getIcon(`https://${cid}.ipfs.nftstorage.link/`, (url, init) => {
+      if ((url.searchParams.get("url") ?? "").includes("nftstorage.link")) {
+        return new Promise<Response>((_, reject) =>
+          init?.signal?.addEventListener("abort", () => {
+            stopped = true;
+            reject(new DOMException("aborted", "AbortError"));
+          }),
+        );
+      }
+      return new Response(WEBP, { status: 200 });
+    });
+    expect(res.status).toBe(200);
+    expect(Date.now() - startedAt).toBeLessThan(3_000);
+    expect(calls).toHaveLength(2);
+    expect(stopped).toBe(true);
   });
 
   it("refuses unsafe sources before any request", async () => {
