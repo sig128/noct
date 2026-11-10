@@ -40,6 +40,7 @@ No upstream source commits are pinned. Code dependencies are pinned by exact ver
   - `jupiterz` (RFQ): System, Compute Budget, Token, Token-2022, Associated Token, Memo, Jupiter order engine; only the order's `maker`, `signatureFeePayer` or `prioritizationFeePayer` may co-sign or pay fees
 - Excluded routers: `dflow`, `okx`. Their settlement programs were not verified, so they are excluded in the request and refused if returned.
 - Evidence: assembled `/order` transactions are not to be modified and are landed via `/execute` (developers.jup.ag/docs/swap).
+- Some wallets add their own Lighthouse assertion instructions (`L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95`) after review. NOCT accepts that only when every reviewed instruction is unchanged (see transaction-lifecycle.md) and forwards the transaction; Jupiter decides whether to land a transaction modified this way.
 
 ## Jupiter Tokens v2 and Price v3
 

@@ -6,7 +6,7 @@ This document states what NOCT trusts, what it defends against, and where its pr
 
 | Party | Trusted for | Not trusted for |
 | --- | --- | --- |
-| The user's wallet | Holding keys; showing the user what it signs; producing honest signatures | Not altering transactions (NOCT re-checks the returned bytes) |
+| The user's wallet | Holding keys; showing the user what it signs; producing honest signatures | Altering transactions beyond its own safety checks (Lighthouse) and fee settings (NOCT compares the returned bytes with the reviewed ones, instruction by instruction) |
 | The browser tab | Holding derived viewing keys and decrypted state in memory while unlocked | Persisting anything private (only `noct.settings.v1` is stored) |
 | NOCT's server | Relaying requests, holding provider API keys, validating and rate-limiting | Signing, custody, seeing keys or derivation signatures (it never receives them) |
 | Jupiter | Quotes, assembled transactions, landing, lending data | Program choice (allowlisted), fee payer and signers (checked), terms changing after review (intent check and expiry) |

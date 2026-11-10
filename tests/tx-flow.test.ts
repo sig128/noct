@@ -51,13 +51,14 @@ function intentFor(signer: string, operationId: string, extra: Partial<SwapInten
   };
 }
 
-async function setup(opts: { reject?: number } = {}) {
+async function setup(opts: { reject?: number; alter?: (signer: string) => Uint8Array } = {}) {
   const { kp, address } = await keypair();
   let calls = 0;
   const sign = vi.fn(async ({ transaction }: { transaction: Uint8Array }) => {
     calls += 1;
     if (opts.reject && calls <= opts.reject) throw Object.assign(new Error("User rejected the request"), { code: 4001 });
-    return [{ signedTransaction: await signWith(kp, transaction) }];
+    // A wallet that rewrites the transaction before signing (as Phantom does when it adds safety checks).
+    return [{ signedTransaction: await signWith(kp, opts.alter ? opts.alter(address) : transaction) }];
   });
   const option = {
     name: "Test wallet",
@@ -128,6 +129,33 @@ describe("transaction coordinator", () => {
     expect(record.submissions).toHaveLength(1);
     expect(record.phase).toBe("completed");
     expect(useActivity.getState().items[0]!.phase).toBe("completed");
+  });
+
+  it("sends a transaction the wallet only added its own safety checks to, and says so", async () => {
+    const { address } = await setup({ alter: (signer) => unsignedTx(signer, [PROGRAMS.jupiterAggregatorV6, PROGRAMS.lighthouse]) });
+    stubRpc(simulateOk);
+    let noteWhenSent: string | null | undefined;
+    const submit = vi.fn(async () => {
+      noteWhenSent = useTxFlow.getState().note;
+      return { status: "confirmed" as const, signature: "5".repeat(88) };
+    });
+    await txFlow.start(spec(address, { submit }));
+    await txFlow.approve();
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(useTxFlow.getState().phase).toBe("completed");
+    expect(noteWhenSent).toMatch(/added its own safety checks \(Lighthouse/);
+  });
+
+  it("does not send a transaction the wallet changed in any other way, and says what changed", async () => {
+    const submit = vi.fn(async () => ({ status: "unknown" as const, signature: null, message: "x" }));
+    const { address } = await setup({ alter: (signer) => unsignedTx(signer, [PROGRAMS.jupiterAggregatorV6, "Vote111111111111111111111111111111111111111"]) });
+    stubRpc(simulateOk);
+    await txFlow.start(spec(address, { submit }));
+    await txFlow.approve();
+    const s = useTxFlow.getState();
+    expect(submit).not.toHaveBeenCalled();
+    expect(s.phase).toBe("rejected");
+    expect(s.error).toMatch(/Your wallet changed the transaction after review \(it added or changed an instruction for Unrecognised program Vote…1111\), so NOCT did not send it\./);
   });
 
   it("blocks signing when the transaction invokes a program outside the allowlist", async () => {

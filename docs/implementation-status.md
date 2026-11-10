@@ -4,7 +4,7 @@ As of 2026-11-10. Five categories, from strongest evidence to none. "Fixtures" m
 
 ## 1. Verified in this build
 
-Evidence: `npm run typecheck` (strict), 154 Vitest tests in 14 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
+Evidence: `npm run typecheck` (strict), 163 Vitest tests in 15 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
 
 | Area | What was verified |
 | --- | --- |
@@ -12,7 +12,7 @@ Evidence: `npm run typecheck` (strict), 154 Vitest tests in 14 files, a producti
 | Token safety | Metadata sanitising, icon proxy (public HTTPS hosts through an image service, the operator's own IPFS gateway, Helius's image cache with the metadata's own URL spelling, staggered attempts, no direct requests to public IPFS gateways, redirects kept on the allowlist, raster only), impostor ticker detection (Cyrillic, digit, lowercase-l lookalikes), risk notes, mint-account parsing for SPL and Token-2022 extensions, transfer-fee epochs |
 | Quotes | Schema validation, staleness, latest-request-wins under races, results never shown for an earlier search or amount |
 | Intents | Digest binding of every material field; any change or expiry voids approval; assembled order re-checked against the intent |
-| Transaction checks | Decoding, version, fee payer, required signers and co-signers, program allowlist, garbage rejection (the order, execute, Earn and Borrow routes apply the same function; the routes themselves have no dedicated tests) |
+| Transaction checks | Decoding, version, fee payer, required signers and co-signers, program allowlist, garbage rejection, wallet changes after signing compared instruction by instruction (only Lighthouse safety checks and fee settings accepted; anything else refused with the reason) (the order, execute, Earn and Borrow routes apply the same function; the routes themselves have no dedicated tests) |
 | Lifecycle | State machine, timeout-then-reconcile without resubmitting, late landing reported as completed, expiry proven before retry, RPC failure never counted as "did not land", wallet/network change cancels, declined signature recoverable, expired terms unsignable, explicit downgrade consent, reservations |
 | Swap flow (browser, fixtures) | Connect, quote, costs and route, review with full mints, program and simulation checks, one signature, landing, receipt, Activity entry |
 | Duplicate protection (browser) | A double click produces one signature request and one `/execute` call |

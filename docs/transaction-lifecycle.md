@@ -57,7 +57,8 @@ The full transition table is in `TRANSITIONS`; any other transition throws `Inva
 | Wallet declines | `rejected`; nothing sent; reservation released; "Try signing again" re-uses the same reviewed bytes while they are valid |
 | Terms expire before signing | `staleQuote`; signing disabled; "Get fresh terms" |
 | Policy violation or failed simulation | Signing blocked with the reason |
-| Wallet modifies the transaction unverifiably | `rejected`; nothing sent |
+| Wallet adds its own safety checks (Lighthouse) or changes fee settings | Sent, after NOCT confirms every reviewed instruction is unchanged and in order and the fee payer, signers, version and blockhash are the same; the dialog says so |
+| Wallet changes the transaction in any other way | `rejected`; nothing sent; the dialog says what changed |
 | Recipient not registered for private transfers | Failure with an explicit alternative: review a public withdrawal (with downgrade consent) |
 | Jupiter reports failure with a signature | Reconcile that signature before saying anything about funds |
 | Wallet or account change, or lock | Session invalidated; private views cleared; non-in-flight operations cancelled |

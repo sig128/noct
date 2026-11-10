@@ -15,6 +15,8 @@ export const PROGRAMS = {
   jupiterLendRewards: "jup7TthsMgcR9Y3L277b8Eo9uboVSmu1utkuXHNUKar",
   privacyRingsPool: "ring1GaLCuJnkUMVkX2JeZLTTX17wKsV4fZmPVzXANW",
   privacyRingsRegistry: "regy3WAeRXMYuMYxr5iK3Bf9Arr3PcxGxyzAddbiqDQ",
+  /** Assertion program some wallets (Phantom) append after review; it only checks state. */
+  lighthouse: "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95",
 } as const;
 
 export const PROGRAM_LABELS: Record<string, string> = {
@@ -33,6 +35,7 @@ export const PROGRAM_LABELS: Record<string, string> = {
   [PROGRAMS.jupiterLendRewards]: "Jupiter Lend rewards",
   [PROGRAMS.privacyRingsPool]: "Privacy Rings shielded pool",
   [PROGRAMS.privacyRingsRegistry]: "Privacy Rings user registry",
+  [PROGRAMS.lighthouse]: "Lighthouse (your wallet's safety checks)",
 };
 
 const BASE = [PROGRAMS.system, PROGRAMS.computeBudget, PROGRAMS.token, PROGRAMS.token2022, PROGRAMS.associatedToken];

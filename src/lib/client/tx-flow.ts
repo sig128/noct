@@ -8,6 +8,8 @@ import { reconcileSignature } from "@/lib/operations/reconcile";
 import { assertNoSilentDowngrade, PrivacyDowngradeError, type DisclosureProfile, type PrivacyClass } from "@/lib/privacy/model";
 import { checkTransactionPolicy, inspectTransactionBytes, bytesToBase64, type InspectedTransaction, type TransactionPolicy } from "@/lib/tx/inspect";
 import { getTransactionDecoder } from "@solana/kit";
+import { compareWalletChanges, WALLET_ADDED_PROGRAMS } from "@/lib/tx/wallet-changes";
+import { PROGRAMS, programLabel } from "@/lib/tx/programs";
 import { signTransaction, WalletActionError } from "@/lib/wallet/standard";
 import { journal, reservations, useActivity, useWallet, type ActivityItem } from "./stores";
 import { solanaRpc } from "./rpc";
@@ -270,20 +272,30 @@ export const txFlow = {
       set({ error: error instanceof WalletActionError ? error.message : "The wallet could not sign." });
       return;
     }
-    // The wallet may not alter what was reviewed unless the result still passes policy.
+    // The wallet may only add its own safety checks or adjust fees; every reviewed instruction must survive unchanged.
     const before = getTransactionDecoder().decode(built.wire).messageBytes;
     const after = getTransactionDecoder().decode(signed).messageBytes;
     const same = before.length === after.length && before.every((b, i) => b === after[i]);
     if (!same) {
+      const changes = compareWalletChanges(built.wire, signed);
       const policy = spec.policy?.(built);
-      const recheck = policy ? checkTransactionPolicy(inspectTransactionBytes(signed), policy) : { ok: false, violations: ["No policy"] };
-      if (!recheck.ok) {
+      const recheck = policy
+        ? checkTransactionPolicy(inspectTransactionBytes(signed), { ...policy, allowedPrograms: [...policy.allowedPrograms, ...WALLET_ADDED_PROGRAMS] })
+        : { ok: false, violations: ["NOCT has no rules to re-check this transaction against."] };
+      if (!changes.acceptable || !recheck.ok) {
         reservations.release(operationId);
         move("rejected", "Wallet modified the transaction");
-        set({ error: "Your wallet changed the transaction after review in a way NOCT cannot verify. Nothing was sent." });
+        const why = changes.problems.length > 0 ? changes.problems.join("; ") : recheck.violations.join(" ");
+        set({ error: `Your wallet changed the transaction after review (${why}), so NOCT did not send it.` });
         return;
       }
-      set({ note: "Your wallet adjusted the transaction; NOCT re-checked it against the same rules." });
+      const added = changes.addedPrograms.filter((p) => p !== PROGRAMS.computeBudget);
+      set({
+        note:
+          added.length > 0
+            ? `Your wallet added its own safety checks (${added.map(programLabel).join(", ")}). NOCT confirmed every reviewed instruction is unchanged.`
+            : "Your wallet adjusted the fee settings. NOCT confirmed every reviewed instruction is unchanged.",
+      });
     }
 
     const signature = signatureOf(signed, s.inspection?.feePayer ?? spec.signer);

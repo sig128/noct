@@ -4,6 +4,7 @@ import { badRequest, errorResponse, rateLimit, readJsonBody, sameOriginGuard } f
 import { executeOrder } from "@/lib/server/jupiter";
 import { inspectTransactionBase64, checkTransactionPolicy } from "@/lib/tx/inspect";
 import { ROUTER_PROGRAMS } from "@/lib/tx/programs";
+import { WALLET_ADDED_PROGRAMS } from "@/lib/tx/wallet-changes";
 import { log } from "@/lib/server/log";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
     const inspected = inspectTransactionBase64(parsed.data.signedTransaction);
     const policy = checkTransactionPolicy(inspected, {
       feePayer: parsed.data.taker,
-      allowedPrograms: ROUTER_PROGRAMS[parsed.data.router] ?? [],
+      // The browser already compared the signed transaction with the reviewed one; a wallet's own safety checks may remain.
+      allowedPrograms: [...(ROUTER_PROGRAMS[parsed.data.router] ?? []), ...WALLET_ADDED_PROGRAMS],
       allowedCoSigners: inspected.requiredSigners.filter((s) => s !== parsed.data.taker),
       allowedVersions: [0, "legacy"],
       maxSigners: 3,
