@@ -85,7 +85,7 @@ describe("token icon proxy", () => {
     });
     expect(res.status).toBe(200);
     const asked = calls.filter((c) => new URL(c).hostname === "wsrv.nl").map((c) => new URL(c).searchParams.get("url"));
-    expect(asked).toEqual([`https://${cid}.ipfs.nftstorage.link/`, `https://cdn.helius-rpc.com/cdn-cgi/image//https://${cid}.ipfs.nftstorage.link/`, `https://ipfs.io/ipfs/${cid}`]);
+    expect(asked).toEqual([`https://${cid}.ipfs.nftstorage.link/`, `https://ipfs.io/ipfs/${cid}`]);
   });
 
   it("starts the next gateway while a slow one is still running, and stops the slow one once an icon arrives", async () => {

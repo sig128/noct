@@ -183,8 +183,8 @@ export async function GET(req: NextRequest) {
   const resized = (label: string, url: URL) => attempt(`service ${label}`, (signal) => fetchImage(viaService(url), (host) => SERVICE_HOSTS.has(host), signal));
   const attempts: Attempt[] = [
     resized(shortHost(named!), named!),
-    resized("helius cdn", cached),
-    attempt("direct helius cdn", (signal) => fetchImage(cached, (host) => host === HELIUS_CDN_HOST, signal)),
+    // The image service cannot fetch the cache's URLs, so it is asked directly.
+    attempt("helius cdn", (signal) => fetchImage(cached, (host) => host === HELIUS_CDN_HOST, signal)),
     ...gateways.map((c) => resized(shortHost(c), c)),
     ...candidates.filter((c) => onAllowlist(c.hostname)).map((c) => attempt(`direct ${shortHost(c)}`, (signal) => fetchImage(c, onAllowlist, signal))),
   ];
