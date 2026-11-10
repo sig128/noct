@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
@@ -22,7 +22,11 @@ async function getIcon(source: string, handler: Handler) {
   return { res, calls };
 }
 
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => vi.stubEnv("NOCT_SILENT_LOGS", "1"));
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe("token icon proxy", () => {
   it("serves an icon from any public host through the image service, as a small raster", async () => {

@@ -2,6 +2,7 @@ import { type NextRequest } from "next/server";
 import { rateLimit } from "@/lib/server/guard";
 import { iconCandidates, isAllowedIconUrl, normalizeIconUrl } from "@/lib/tokens/sanitize";
 import { iconHosts } from "@/lib/server/jupiter";
+import { log } from "@/lib/server/log";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ const ATTEMPT_MS = 4_500;
 const STAGGER_MS = 1_250;
 
 type Image = { bytes: Uint8Array<ArrayBuffer>; type: string };
+/** An image, or a short reason the attempt failed (for the operations log). */
+type Outcome = Image | string;
 type Attempt = (signal: AbortSignal) => Promise<Image | null>;
 
 function sniff(bytes: Uint8Array): string | null {
@@ -30,9 +33,9 @@ function sniff(bytes: Uint8Array): string | null {
 
 /**
  * Fetches an image, following at most three redirects and only to hosts
- * `allowHost` accepts. Returns raster bytes (checked by magic bytes) or null.
+ * `allowHost` accepts. Returns raster bytes (checked by magic bytes) or why not.
  */
-async function fetchImage(start: URL, allowHost: (host: string) => boolean, signal: AbortSignal): Promise<Image | null> {
+async function fetchImage(start: URL, allowHost: (host: string) => boolean, signal: AbortSignal): Promise<Outcome> {
   const limit = AbortSignal.any([signal, AbortSignal.timeout(ATTEMPT_MS)]);
   try {
     let url = start;
@@ -40,15 +43,15 @@ async function fetchImage(start: URL, allowHost: (host: string) => boolean, sign
       const res = await fetch(url, { signal: limit, redirect: "manual", headers: { accept: "image/webp,image/png,image/jpeg,image/gif" } });
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get("location");
-        if (!location) return null;
+        if (!location) return `${res.status} without location`;
         const next = new URL(location, url);
-        if (next.protocol !== "https:" || next.username || next.password || next.port || !allowHost(next.hostname.toLowerCase())) return null;
+        if (next.protocol !== "https:" || next.username || next.password || next.port || !allowHost(next.hostname.toLowerCase())) return `redirect to ${next.hostname} refused`;
         url = next;
         continue;
       }
       if (!res.ok || !res.body) {
         await res.body?.cancel().catch(() => undefined);
-        return null;
+        return String(res.status);
       }
       const reader = res.body.getReader();
       const chunks: Uint8Array[] = [];
@@ -59,7 +62,7 @@ async function fetchImage(start: URL, allowHost: (host: string) => boolean, sign
         total += value.byteLength;
         if (total > MAX_BYTES) {
           await reader.cancel();
-          return null;
+          return "too large";
         }
         chunks.push(value);
       }
@@ -70,11 +73,11 @@ async function fetchImage(start: URL, allowHost: (host: string) => boolean, sign
         offset += c.byteLength;
       }
       const type = sniff(bytes);
-      return type ? { bytes, type } : null;
+      return type ? { bytes, type } : "not a raster image";
     }
-    return null;
+    return "too many redirects";
   } catch {
-    return null;
+    return signal.aborted ? "stopped" : limit.aborted ? "timed out" : "network error";
   }
 }
 
@@ -130,6 +133,11 @@ function viaService(source: URL): URL {
   return url;
 }
 
+/** A gateway host without the IPFS content id in front, to keep log lines short. */
+function shortHost(url: URL): string {
+  return url.hostname.replace(/^[a-z0-9]{40,}\.ipfs\./, "ipfs.");
+}
+
 /**
  * Token icons, served from this origin so a user's IP never reaches the hosts
  * named in token metadata. Icons go through an image service (wsrv.nl), which
@@ -146,12 +154,22 @@ export async function GET(req: NextRequest) {
   const source = normalizeIconUrl(req.nextUrl.searchParams.get("u"));
   if (!source) return new Response(null, { status: 404 });
 
-  const candidates = iconCandidates(source).slice(0, 3);
+  const candidates = iconCandidates(source).slice(0, 4);
   const hosts = iconHosts();
   const onAllowlist = (host: string) => isAllowedIconUrl(`https://${host}/`, hosts) !== null;
+  const failures: string[] = [];
+  const attempt =
+    (label: string, run: (signal: AbortSignal) => Promise<Outcome>): Attempt =>
+    async (signal) => {
+      const startedAt = Date.now();
+      const outcome = await run(signal);
+      if (typeof outcome !== "string") return outcome;
+      failures.push(`${label}: ${outcome} after ${Date.now() - startedAt} ms`);
+      return null;
+    };
   const attempts: Attempt[] = [
-    ...candidates.map((c): Attempt => (signal) => fetchImage(viaService(c), (host) => SERVICE_HOSTS.has(host), signal)),
-    ...candidates.filter((c) => onAllowlist(c.hostname)).map((c): Attempt => (signal) => fetchImage(c, onAllowlist, signal)),
+    ...candidates.map((c) => attempt(`service ${shortHost(c)}`, (signal) => fetchImage(viaService(c), (host) => SERVICE_HOSTS.has(host), signal))),
+    ...candidates.filter((c) => onAllowlist(c.hostname)).map((c) => attempt(`direct ${shortHost(c)}`, (signal) => fetchImage(c, onAllowlist, signal))),
   ];
   const controller = new AbortController();
   const budget = setTimeout(() => controller.abort(), BUDGET_MS);
@@ -161,6 +179,8 @@ export async function GET(req: NextRequest) {
   controller.abort();
 
   if (!image) {
+    // Hosts and statuses only: which icon a person looked at is not logged.
+    log("icon.miss", Object.fromEntries(failures.map((f, i) => [`attempt${i + 1}`, f])));
     // Cache misses briefly so a missing icon does not hit the upstream on every view.
     return new Response(null, { status: 404, headers: { "cache-control": "public, max-age=300, s-maxage=600" } });
   }
