@@ -2,10 +2,32 @@ import { describe, expect, it } from "vitest";
 import { annotateIdentity, rankTokens, skeletonTicker } from "@/lib/tokens/identity";
 import { assessTokenRisk } from "@/lib/tokens/risk";
 import { isAllowedIconUrl, sanitizeName, sanitizeSymbol, sanitizeText } from "@/lib/tokens/sanitize";
-import { DEMO_TOKENS } from "@/lib/adapters/demo";
-import type { TokenInfo } from "@/lib/tokens/types";
+import { NATIVE_SOL_MINT, type TokenInfo } from "@/lib/tokens/types";
 
-const base = DEMO_TOKENS[0]!;
+const base: TokenInfo = {
+  mint: NATIVE_SOL_MINT,
+  symbol: "SOL",
+  name: "Wrapped SOL",
+  decimals: 9,
+  icon: null,
+  tokenProgram: "spl",
+  tokenProgramId: null,
+  verified: true,
+  tags: [],
+  organicScore: 90,
+  organicScoreLabel: "high",
+  audit: { isSus: false, mintAuthorityDisabled: true, freezeAuthorityDisabled: true, topHoldersPercentage: 18, devBalancePercentage: 0 },
+  mintAuthority: null,
+  freezeAuthority: null,
+  usdPrice: "81.80094410",
+  priceBlockId: null,
+  liquidityUsd: 50_000_000,
+  holderCount: 1_000_000,
+  launchpad: null,
+  createdAt: "2021-01-01T00:00:00Z",
+  updatedAt: "2026-11-10T12:00:00Z",
+  source: "jupiter",
+};
 function tok(p: Partial<TokenInfo>): TokenInfo {
   return { ...base, ...p };
 }

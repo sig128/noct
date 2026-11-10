@@ -1,6 +1,8 @@
 import type { PrivacyClass } from "@/lib/privacy/model";
 
-export type Network = "mainnet" | "devnet";
+/** NOCT runs on Solana mainnet only. The field stays in every intent so a signature is bound to it. */
+export type Network = "mainnet";
+export const NETWORK: Network = "mainnet";
 
 interface IntentBase {
   operationId: string;

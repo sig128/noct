@@ -2,15 +2,13 @@
 
 import { formatUsdPrice, parseDecimalRatio } from "@/lib/decimal";
 import { usePrices } from "@/lib/client/hooks";
-import { usePrivate, useSettings, useSwapDraft } from "@/lib/client/stores";
+import { usePrivate, useSwapDraft } from "@/lib/client/stores";
 import styles from "./swap.module.css";
 
 /** Compact market and privacy context under the swap card. */
 export function ContextStrip() {
   const input = useSwapDraft((s) => s.input);
   const requested = useSwapDraft((s) => s.requestedPrivacy);
-  const network = useSettings((s) => s.network);
-  const demo = useSettings((s) => s.demoMode);
   const privateStatus = usePrivate((s) => s.status);
   const prices = usePrices([input?.mint]);
   const price = input ? prices.data?.[input.mint]?.usdPrice : undefined;
@@ -23,7 +21,7 @@ export function ContextStrip() {
       </div>
       <div className={styles.cell}>
         <span className={styles.cellLabel}>Routing</span>
-        <span className={styles.cellValue}>{demo ? "Demo quotes" : network === "mainnet" ? "Jupiter, mainnet" : "Mainnet only"}</span>
+        <span className={styles.cellValue}>Jupiter, mainnet</span>
       </div>
       <div className={styles.cell}>
         <span className={styles.cellLabel}>Privacy</span>

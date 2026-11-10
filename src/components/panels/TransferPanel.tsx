@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatAmount, parseUnits } from "@/lib/decimal";
-import { usePrivate, useSettings, useTransferDraft, useWallet } from "@/lib/client/stores";
+import { NETWORK } from "@/lib/operations/intent";
+import { usePrivate, useTransferDraft, useWallet } from "@/lib/client/stores";
 import { privateTransferSpec, registrationSpec } from "@/lib/client/private-specs";
 import { txFlow } from "@/lib/client/tx-flow";
 import { useTokensByMint } from "@/lib/client/hooks";
@@ -20,9 +21,8 @@ import styles from "./panels.module.css";
 
 export function TransferPanel() {
   const [tab, setTab] = useState<"send" | "receive">("send");
-  const demo = useSettings((s) => s.demoMode);
   return (
-    <ModulePanel id="send" title="Send and receive" lead="Private transfers from your private balance to a registered Solana address." badge={demo ? <span className="chip chip-warn">Demo data</span> : null}>
+    <ModulePanel id="send" title="Send and receive" lead="Private transfers from your private balance to a registered Solana address.">
       <div style={{ marginBottom: 16 }}>
         <Segmented
           label="Direction"
@@ -56,8 +56,6 @@ function LockedNotice() {
 
 function SendForm() {
   const priv = usePrivate();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address);
   const draft = useTransferDraft();
   const tokens = useTokensByMint(priv.balances.map((b) => b.mint));
@@ -69,7 +67,7 @@ function SendForm() {
         title="Connect a wallet"
         action={
           <button type="button" className="btn" onClick={() => useWallet.getState().set({ pickerOpen: true })}>
-            {demo ? "Use demo wallet" : "Connect wallet"}
+            Connect wallet
           </button>
         }
       />
@@ -98,9 +96,8 @@ function SendForm() {
         if (!validRecipient || self || !amount || over) return;
         void txFlow.start(
           privateTransferSpec({
-            network,
+            network: NETWORK,
             signer: address,
-            demo,
             assetMint: mint,
             symbol: label.symbol,
             decimals: label.decimals,
@@ -158,8 +155,6 @@ function SendForm() {
 function ReceiveView() {
   const priv = usePrivate();
   const address = useWallet((s) => s.address);
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const [mint, setMint] = useState<string>(NATIVE_SOL_MINT);
   const [amountText, setAmountText] = useState("");
   const label = useTokenLabel(mint);
@@ -199,7 +194,7 @@ function ReceiveView() {
           <Icon name="info" size={16} />
           <span>
             Not registered yet.{" "}
-            <button type="button" className="link" style={{ background: "none", border: 0, padding: 0, color: "inherit", font: "inherit" }} onClick={() => void txFlow.start(registrationSpec({ network, signer: address, demo }))}>
+            <button type="button" className="link" style={{ background: "none", border: 0, padding: 0, color: "inherit", font: "inherit" }} onClick={() => void txFlow.start(registrationSpec({ network: NETWORK, signer: address }))}>
               Review registration
             </button>
           </span>

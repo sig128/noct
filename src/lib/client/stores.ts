@@ -18,46 +18,52 @@ import { ReservationBook } from "@/lib/balances/ledger";
 // ---------------------------------------------------------------------------
 
 export interface Settings {
-  demoMode: boolean;
-  network: Network;
   maskBalances: boolean;
   lockAfterMinutes: number;
   /** null = let the venue estimate slippage. */
   slippageBps: number | null;
-  setDemoMode(v: boolean): void;
-  setNetwork(v: Network): void;
   setMaskBalances(v: boolean): void;
   setLockAfterMinutes(v: number): void;
   setSlippageBps(v: number | null): void;
 }
 
+type PersistedSettings = Pick<Settings, "maskBalances" | "lockAfterMinutes" | "slippageBps">;
+
+/** Keeps only today's preferences from anything stored earlier (older versions also stored a network and a demo switch). */
+export function sanitizeStoredSettings(stored: unknown): Partial<PersistedSettings> {
+  const s = (stored ?? {}) as Record<string, unknown>;
+  const out: Partial<PersistedSettings> = {};
+  if (typeof s.maskBalances === "boolean") out.maskBalances = s.maskBalances;
+  if (typeof s.lockAfterMinutes === "number" && Number.isFinite(s.lockAfterMinutes) && s.lockAfterMinutes >= 0) out.lockAfterMinutes = s.lockAfterMinutes;
+  if (s.slippageBps === null || (typeof s.slippageBps === "number" && Number.isInteger(s.slippageBps) && s.slippageBps > 0 && s.slippageBps <= 5_000)) out.slippageBps = s.slippageBps as number | null;
+  return out;
+}
+
 export const useSettings = create<Settings>()(
   persist(
     (set) => ({
-      demoMode: false,
-      network: "mainnet",
       maskBalances: false,
       lockAfterMinutes: 10,
       slippageBps: null,
-      setDemoMode: (demoMode) => set({ demoMode }),
-      setNetwork: (network) => set({ network }),
       setMaskBalances: (maskBalances) => set({ maskBalances }),
       setLockAfterMinutes: (lockAfterMinutes) => set({ lockAfterMinutes }),
       setSlippageBps: (slippageBps) => set({ slippageBps }),
     }),
     {
       name: "noct.settings.v1",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
-      partialize: (s) => ({ demoMode: s.demoMode, network: s.network, maskBalances: s.maskBalances, lockAfterMinutes: s.lockAfterMinutes, slippageBps: s.slippageBps }),
+      partialize: (s): PersistedSettings => ({ maskBalances: s.maskBalances, lockAfterMinutes: s.lockAfterMinutes, slippageBps: s.slippageBps }),
+      migrate: (stored) => sanitizeStoredSettings(stored) as Settings,
+      merge: (stored, current) => ({ ...current, ...sanitizeStoredSettings(stored) }),
     },
   ),
 );
 
 /**
- * True once persisted settings are loaded. Network reads wait for it so a page
- * opened in demo mode never sends a live request with the default settings.
+ * True once persisted settings are loaded. Quote and balance reads wait for it
+ * so they run once with the stored slippage and masking, not first with defaults.
  */
 export function useSettingsReady(): boolean {
   return useSyncExternalStore(
@@ -163,7 +169,6 @@ export interface PrivateState {
   registered: boolean | null;
   lastSyncedAt: number | null;
   error: string | null;
-  demo: boolean;
   set(partial: Partial<Omit<PrivateState, "set" | "lock">>): void;
   lock(reason?: string): void;
 }
@@ -179,7 +184,7 @@ export function getPrivacySession(): PrivacySession | null {
   return activeSession;
 }
 
-const lockedState = { status: "locked" as const, owner: null, network: null, balances: [], history: [], registered: null, lastSyncedAt: null, demo: false };
+const lockedState = { status: "locked" as const, owner: null, network: null, balances: [], history: [], registered: null, lastSyncedAt: null };
 
 export const usePrivate = create<PrivateState>()((set) => ({
   ...lockedState,
@@ -209,7 +214,6 @@ export interface ActivityItem {
   phase: Phase;
   signature: string | null;
   createdAt: number;
-  demo: boolean;
   note: string | null;
 }
 

@@ -13,9 +13,9 @@ No upstream source commits are pinned. Code dependencies are pinned by exact ver
 | Jupiter Price API | v3 `GET /price/v3?ids=` | mainnet | USD display only | Implemented; fixture-tested |
 | Jupiter Lend Earn API | beta, `/lend/v1/earn/*` | mainnet | Supply and withdraw | Implemented; fixture-tested |
 | Jupiter Lend Borrow API | beta, `/lend/v1/borrow/*` | mainnet | Vaults, positions, operate | Implemented; fixture-tested |
-| Solana Privacy Rings | `@heliuslabs/spr` **0.9.0-alpha** | devnet; mainnet gated off | Private balance, private transfer, public withdrawal | Implemented; **not run against live services** (needs `HELIUS_API_KEY`) |
+| Solana Privacy Rings | `@heliuslabs/spr` **0.9.0-alpha** | mainnet, behind the operator switch `SPR_MAINNET_ENABLED` | Private balance, private transfer, public withdrawal | Implemented; **not run with real funds** (needs `HELIUS_API_KEY`) |
 | Pyth prices | Push feed accounts on Solana (default) or Hermes `GET /v2/updates/price/latest` with a key | mainnet | Independent check before risk-increasing borrow actions | Implemented; on-chain path needs no Pyth key |
-| Solana JSON-RPC | standard methods (allowlisted) | mainnet, devnet | Balances, mint accounts, simulation, submission, status | Implemented; fixture-tested |
+| Solana JSON-RPC | standard methods (allowlisted) | mainnet | Balances, mint accounts, simulation, submission, status | Implemented; fixture-tested |
 | Wallet Standard | `@wallet-standard/app` 1.1.1, `@solana/wallet-standard-features` 1.5.0 | n/a | Connect, sign transaction, sign derivation message | Implemented; tested with an injected QA wallet only |
 
 ## Jupiter Swap API v2
@@ -61,15 +61,15 @@ Scales used by the vault math (`src/lib/credit/vault-math.ts`):
 - Programs (allowlisted for privacy transactions and the only `getProgramAccounts` targets the RPC relay permits):
   - Shielded pool `ring1GaLCuJnkUMVkX2JeZLTTX17wKsV4fZmPVzXANW`
   - User registry `regy3WAeRXMYuMYxr5iK3Bf9Arr3PcxGxyzAddbiqDQ`
-- Services (defaults from the SDK README, overridable by env; the README calls the mainnet ones "deployment examples"):
+- Services (mainnet defaults from the SDK README, which calls them "deployment examples"; overridable by env):
 
-  | Service | Devnet | Mainnet |
-  | --- | --- | --- |
-  | Indexer (Photon) | `https://d34xe1hqb2ibg2.cloudfront.net` | `https://dgcj4pjarvo65.cloudfront.net` |
-  | Prover (Nitro enclave) | `https://dd73hh473h6ha.cloudfront.net` | `https://d3ky2kt0ntqxt1.cloudfront.net` |
-  | Signed TEE policy | `SPR_POLICY_BASE/devnet.json` | `SPR_POLICY_BASE/mainnet.json` |
+  | Service | Mainnet |
+  | --- | --- |
+  | Indexer (Photon) | `https://dgcj4pjarvo65.cloudfront.net` |
+  | Prover (Nitro enclave) | `https://d3ky2kt0ntqxt1.cloudfront.net` |
+  | Signed TEE policy | `SPR_POLICY_BASE/mainnet.json` |
 
-- Transport: the browser reaches all three through `/api/spr/{network}/{indexer|prover|policy}`, which adds the API key server-side. Prover requests are encrypted by the SDK to an enclave whose attestation it verifies against pinned policy signers, so the relay sees sizes, timing and routes only.
+- Transport: the browser reaches all three through `/api/spr/mainnet/{indexer|prover|policy}`, which adds the API key server-side and refuses any other network. Prover requests are encrypted by the SDK to an enclave whose attestation it verifies against pinned policy signers, so the relay sees sizes, timing and routes only.
 - Transactions: version 1 Solana transactions. Wallet support for v1 in `solana:signTransaction` is required and was **not** verified against any production wallet.
 - Launch status (2026-11-10):
   - Helius announced the Default Ring **live on Solana mainnet** on 2026-11-10 (helius.dev/privacy: "Solana Privacy Rings are now live on mainnet"). The mainnet addresses page lists the shielded pool `ring1GaLC…ANW`, the user registry `regy3WA…iqDQ`, the state tree `777pvSGe5LaBd9nCczvE2FXEauiwtfGJ5XRpjKyniGor` and the native-SOL interface PDA `CiNmas621VuyofiDSrEPfTXHKrdZuB6jMKECyNiMpLXE`; the program IDs match NOCT's allowlist.
@@ -77,7 +77,7 @@ Scales used by the vault math (`src/lib/credit/vault-math.ts`):
   - Helius's docs index (`helius.dev/docs/privacy/llms.txt`) still read "Beta, devnet only" on the same day; treat the product as beta.
   - Custom Rings (anonymous model) are announced for Q4 2026 and are not available.
   - Helius's example repository notes that `@heliuslabs/spr` 0.9.0-alpha predates the deployed 1.0 programs' per-tree fee defaults and the registry's `update_keys` data; deposits, transfers, withdrawals, registration, sync and history (what NOCT uses) are the flows its examples exercise with it. Upgrade when a matching npm release ships.
-  - Mainnet private balances are controlled by the operator switch `SPR_MAINNET_ENABLED` (default `false` in code).
+  - Private balances are controlled by the operator switch `SPR_MAINNET_ENABLED` (default `false` in code). NOCT has no devnet mode.
 - Private swaps: Helius's example swap program (`helius-labs/zolana-examples`, `swap/`) is a maker/taker order between two private balances: the maker locks the amount it sells as a private order, a taker fills it before expiry, and amounts and price stay private while the fact of a swap is public. Its circuits use insecure test keys from a fixed public seed ("anyone can forge their proofs") and its program IDs are example IDs. A mainnet version needs its own trusted setup, verifying keys, program ID and audit, plus a liquidity provider holding inventory privately. NOCT does not route funds through it.
 
 ## Pyth price service
@@ -117,6 +117,6 @@ Upgrade authority: Settings reads each program's ProgramData account from the ch
 
 ## Wallet Standard
 
-- Discovery via `@wallet-standard/app`; NOCT prefers an account that advertises the selected chain (`solana:mainnet` or `solana:devnet`).
+- Discovery via `@wallet-standard/app`; NOCT prefers an account that advertises `solana:mainnet` and signs for that chain only.
 - `solana:signTransaction` for every transaction (legacy and v0; v1 for Privacy Rings). NOCT never uses sign-and-send, so it can inspect, simulate, submit and reconcile itself.
 - `solana:signMessage` to sign the exact Privacy Rings derivation message. The result is rejected if the wallet returns a different message.

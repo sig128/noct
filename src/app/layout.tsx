@@ -5,8 +5,8 @@ import { Providers } from "@/components/Providers";
 import { AppShell } from "@/components/shell/AppShell";
 
 export const metadata: Metadata = {
-  title: { default: "Swap | noct", template: "%s | noct" },
-  description: "Swap Solana tokens, hold a private balance and see what every operation reveals before you sign.",
+  title: { default: "noct", template: "%s | noct" },
+  description: "Swap any Solana token, hold and send from a private balance, and see what every operation reveals before you sign.",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };
@@ -21,7 +21,8 @@ export const viewport: Viewport = {
 
 /**
  * The shell lives in the root layout so the swap card stays mounted while
- * tools open and close: an unfinished swap survives navigation.
+ * tools open and close (an unfinished swap survives navigation), and so the
+ * ring can glide from the landing page to its place in the app.
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

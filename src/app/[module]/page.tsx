@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MODULES } from "@/lib/client/modules";
 
-const IDS = MODULES.filter((m) => m.id !== "swap").map((m) => m.href.slice(1));
+const IDS = MODULES.map((m) => m.href.slice(1));
 
 export function generateStaticParams() {
   return IDS.map((module) => ({ module }));

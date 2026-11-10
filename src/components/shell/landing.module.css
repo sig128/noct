@@ -1,0 +1,118 @@
+/* Landing page: the ring is the picture; the words sit in its open centre. */
+
+.landing {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  transition:
+    opacity 0.32s ease,
+    transform 0.5s var(--ease);
+}
+
+.landing[data-leaving] {
+  opacity: 0;
+  transform: scale(0.97);
+  pointer-events: none;
+}
+
+/* Where RingStage draws the ring while the landing is showing. */
+.slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(94vmin, 1040px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+.copy {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  max-width: 36rem;
+  text-align: center;
+  animation: copyIn 0.9s var(--ease) 0.25s both;
+}
+
+@keyframes copyIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin: 0;
+  font-size: clamp(46px, 6.2vw, 84px);
+  font-weight: 600;
+  font-stretch: 125%;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--text);
+}
+
+.mark svg {
+  width: 0.92em;
+  height: 0.92em;
+}
+
+.lead {
+  margin: 6px 0 0;
+  max-width: 30ch;
+  color: var(--text-2);
+  font-size: clamp(16px, 1.45vw, 19px);
+  line-height: 1.45;
+  text-wrap: balance;
+}
+
+.launch {
+  min-height: 52px;
+  margin-top: 10px;
+  padding: 0 30px;
+  border-radius: 16px;
+  font-size: var(--fs-large);
+}
+
+.note {
+  margin: 4px 0 0;
+  max-width: 40ch;
+  color: var(--text-3);
+  font-size: var(--fs-small);
+  text-wrap: balance;
+}
+
+/* Narrow or short screens: the ring above, the words below it. */
+@media (max-width: 759px), (max-height: 620px) {
+  .landing {
+    align-content: center;
+    gap: 6px;
+    overflow-y: auto;
+  }
+  .slot {
+    position: relative;
+    left: auto;
+    top: auto;
+    translate: none;
+    width: min(88vw, 46dvh);
+  }
+  .mark {
+    font-size: clamp(40px, 11vw, 56px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy {
+    animation: none;
+  }
+  .landing[data-leaving] {
+    transform: none;
+  }
+}

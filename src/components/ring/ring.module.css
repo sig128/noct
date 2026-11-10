@@ -1,0 +1,265 @@
+/*
+ * The ring's states. Rotation speed is eased in script (playback rate), so a
+ * change of state speeds the bands up or winds them down without a jump.
+ *   landing  visible motion, light tracing the bands, open centre
+ *   idle     barely turning
+ *   waiting  the wallet is asked to sign: the centre breathes
+ *   moving   a transaction is on its way: light races round the bands
+ *   landed   it confirmed: a bloom, then the bands stay lit for a moment
+ *   failed   the centre turns coral
+ */
+
+.ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  --ring-lead: var(--accent);
+  --ca: 1.7s;
+  --cb: 2.6s;
+  --cc: 1.25s;
+}
+
+.ring[data-tone="private"] {
+  --ring-lead: var(--private);
+}
+
+.ring[data-mode="landing"] {
+  --ca: 11s;
+  --cb: 17s;
+  --cc: 8s;
+}
+
+.spin {
+  transform-origin: 0 0;
+  animation: spin linear infinite;
+}
+
+.spinInner {
+  animation-duration: 360s;
+}
+
+.spinMiddle {
+  animation-duration: 280s;
+  animation-direction: reverse;
+}
+
+.spinOuter {
+  animation-duration: 720s;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.knot,
+.inner {
+  transition: opacity 1.2s ease;
+}
+
+.ring[data-mode="landing"] .knot {
+  opacity: 0;
+}
+
+.ring[data-mode="landing"] .inner {
+  opacity: 0.35;
+}
+
+/* The landing page's words sit in the open centre. */
+.ring[data-mode="landing"] .core {
+  opacity: 0;
+}
+
+/* Points of light orbiting the ring. Each tail is a stack of dashes offset
+   along the circle by a fraction of the lap time, so it fades behind the head. */
+.comets {
+  opacity: 0;
+  transition: opacity 0.7s ease;
+}
+
+.ring[data-mode="moving"] .comets {
+  opacity: 1;
+}
+
+.ring[data-mode="landing"] .comets {
+  opacity: 0.85;
+}
+
+.orbit {
+  --d: var(--ca);
+}
+
+.orbitB {
+  --d: var(--cb);
+}
+
+.orbitC {
+  --d: var(--cc);
+}
+
+.ring[data-mode="landing"] .orbitC {
+  display: none;
+}
+
+.halo,
+.tail1,
+.tail2,
+.tail3,
+.head {
+  stroke: var(--ring-lead);
+  stroke-linecap: round;
+  animation: orbit var(--d) linear infinite;
+}
+
+.halo {
+  stroke-dasharray: 6 94;
+  stroke-opacity: 0.09;
+  animation-delay: calc(var(--d) * -0.06);
+}
+
+.tail1 {
+  stroke-dasharray: 12 88;
+  stroke-opacity: 0.1;
+}
+
+.tail2 {
+  stroke-dasharray: 8 92;
+  stroke-opacity: 0.2;
+  animation-delay: calc(var(--d) * -0.04);
+}
+
+.tail3 {
+  stroke-dasharray: 4.5 95.5;
+  stroke-opacity: 0.38;
+  animation-delay: calc(var(--d) * -0.075);
+}
+
+.head {
+  stroke-dasharray: 1.8 98.2;
+  stroke-opacity: 1;
+  animation-delay: calc(var(--d) * -0.102);
+}
+
+@keyframes orbit {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+/* Lit copies of the bands: a steady glow in flight, a flare on landing. */
+.lit {
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.ring[data-mode="moving"] .lit {
+  opacity: 0.22;
+}
+
+.ring[data-mode="landing"] .lit {
+  opacity: 0.12;
+}
+
+.ring[data-mode="landed"] .lit {
+  animation: lit 2.4s ease-out forwards;
+}
+
+@keyframes lit {
+  0% {
+    opacity: 0.22;
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.38;
+  }
+}
+
+.bloom {
+  opacity: 0;
+  transform-origin: 0 0;
+}
+
+.ring[data-mode="landed"] .bloom {
+  animation: bloom 1.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  22% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+.core {
+  fill: var(--ring-lead);
+  opacity: 0.55;
+  transform-origin: 0 0;
+  transition:
+    fill 0.4s ease,
+    opacity 0.4s ease;
+}
+
+.ring[data-mode="waiting"] .core {
+  animation: breathe 1.5s ease-in-out infinite;
+}
+
+.ring[data-mode="landed"] .core {
+  animation: pop 0.9s ease-out both;
+}
+
+.ring[data-mode="failed"] .core {
+  fill: var(--error);
+  opacity: 0.9;
+}
+
+@keyframes breathe {
+  50% {
+    transform: scale(2.4);
+    opacity: 0.95;
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(3.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0.95;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .halo,
+  .tail1,
+  .tail2,
+  .tail3,
+  .head,
+  .core,
+  .bloom {
+    animation: none !important;
+  }
+  .comets {
+    display: none;
+  }
+  .ring[data-mode="landed"] .lit {
+    animation: none;
+    opacity: 0.55;
+  }
+}

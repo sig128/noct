@@ -16,7 +16,7 @@ const MAX_RESPONSE = 10_500_000;
  */
 async function relay(req: NextRequest, ctx: { params: Promise<{ network: string; path: string[] }> }) {
   const { network, path } = await ctx.params;
-  if (network !== "mainnet" && network !== "devnet") return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  if (network !== "mainnet") return NextResponse.json({ error: "bad_request", message: "NOCT runs on mainnet only." }, { status: 400 });
   // The SDK posts JSON to the indexer and encrypted octet streams to the prover enclave.
   const blocked = req.method === "POST" ? sameOriginGuard(req, { contentTypes: ["application/json", "application/octet-stream"] }) : crossSiteReadGuard(req);
   if (blocked) return blocked;
@@ -24,8 +24,8 @@ async function relay(req: NextRequest, ctx: { params: Promise<{ network: string;
   if (limited) return limited;
   const env = serverEnv();
   if (!env.HELIUS_API_KEY) return NextResponse.json({ error: "not_configured", message: "Private balances need HELIUS_API_KEY on the server." }, { status: 503 });
-  if (network === "mainnet" && env.SPR_MAINNET_ENABLED !== "true") {
-    return NextResponse.json({ error: "gated", message: "Mainnet private balances are disabled on this deployment." }, { status: 403 });
+  if (env.SPR_MAINNET_ENABLED !== "true") {
+    return NextResponse.json({ error: "gated", message: "Private balances are switched off on this deployment." }, { status: 403 });
   }
   const [service, ...rest] = path;
   const tail = rest.map(encodeURIComponent).join("/");
@@ -33,7 +33,7 @@ async function relay(req: NextRequest, ctx: { params: Promise<{ network: string;
 
   let target: URL;
   if (service === "indexer" || service === "prover") {
-    const baseUrl = network === "mainnet" ? (service === "indexer" ? env.SPR_INDEXER_URL_MAINNET : env.SPR_PROVER_URL_MAINNET) : service === "indexer" ? env.SPR_INDEXER_URL_DEVNET : env.SPR_PROVER_URL_DEVNET;
+    const baseUrl = service === "indexer" ? env.SPR_INDEXER_URL_MAINNET : env.SPR_PROVER_URL_MAINNET;
     target = new URL(`${baseUrl.replace(/\/+$/, "")}/${tail}`);
     for (const [k, v] of req.nextUrl.searchParams) if (k !== "api-key") target.searchParams.append(k, v);
     target.searchParams.set("api-key", env.HELIUS_API_KEY);

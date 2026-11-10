@@ -43,13 +43,10 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown } =
 export interface Capabilities {
   verifiedOn: string;
   jupiter: { base: string; keyed: boolean };
-  rpc: Record<"mainnet" | "devnet", { publicDefault: boolean }>;
+  network: "mainnet";
+  rpc: { publicDefault: boolean };
   pyth: { configured: boolean };
-  privacy: {
-    sdk: string;
-    devnet: { configured: boolean; enabled: boolean; reason: string | null };
-    mainnet: { configured: boolean; enabled: boolean; reason: string | null };
-  };
+  privacy: { sdk: string; configured: boolean; enabled: boolean; reason: string | null };
 }
 
 export const api = {

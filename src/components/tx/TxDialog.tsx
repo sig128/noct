@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCapabilities, useEarnMarkets, useMintFacts, useNow } from "@/lib/client/hooks";
 import { txFlow, useTxFlow, type ReviewRow } from "@/lib/client/tx-flow";
-import { useHandoff, usePrivate, useSettings } from "@/lib/client/stores";
+import { useHandoff, usePrivate } from "@/lib/client/stores";
 import { sequence, useSequence } from "@/lib/client/sequence";
 import { shieldSpec } from "@/lib/client/private-specs";
 import { extensionRestrictions } from "@/lib/tokens/mint-account";
@@ -14,6 +14,8 @@ import type { Phase } from "@/lib/operations/state-machine";
 import { programLabel } from "@/lib/tx/programs";
 import { Dialog, ExplorerLinks, Row, Sensitive } from "@/components/ui/primitives";
 import { Icon, Spinner } from "@/components/ui/Icon";
+import { RingArt } from "@/components/ring/RingArt";
+import { ringModeFor, ringToneFor } from "@/components/ring/useTxRing";
 import { VisibilityGrid, DisclosureSheet } from "@/components/swap/DisclosurePreview";
 import styles from "./tx.module.css";
 
@@ -61,8 +63,6 @@ export function TxDialog() {
   const earn = useEarnMarkets();
   const seq = useSequence();
   const privateStatus = usePrivate((p) => p.status);
-  const demoMode = useSettings((st) => st.demoMode);
-  const network = useSettings((st) => st.network);
   const caps = useCapabilities();
   const spec = s.spec;
   const swapIntent = s.built?.intent.kind === "swap" ? s.built.intent : null;
@@ -80,6 +80,9 @@ export function TxDialog() {
   const remaining = s.built ? Math.max(0, Math.ceil((s.built.expiresAt - (now || Date.now())) / 1000)) : null;
   const expired = remaining !== null && remaining <= 0 && (s.phase === "awaitingApproval" || s.phase === "rejected");
   const inFlight = ["preparing", "submitting", "confirming", "pendingRecovery"].includes(s.phase);
+  // From the wallet prompt to the receipt, the ring shows the transaction on its way
+  // and the pre-signing checks step aside.
+  const pastReview = inFlight || s.phase === "completed";
 
   // Cross-module next step: after swapping into an asset with an Earn market, offer (not perform) a supply.
   const swappedInto = spec.kind === "swap" && s.built?.intent.kind === "swap" ? s.built.intent.outputMint : null;
@@ -95,7 +98,7 @@ export function TxDialog() {
   };
 
   // After an ordinary swap, offer to move what was bought into the private balance.
-  const privacyOn = demoMode || Boolean(caps.data?.privacy[network].enabled);
+  const privacyOn = Boolean(caps.data?.privacy.enabled);
   const holdBlocked = outFacts.data ? extensionRestrictions(outFacts.data).some((r) => HOLDING_BLOCKERS.includes(r.code)) : false;
   const receivedText = s.outputs?.received ?? s.outputs?.minimum ?? null;
   const canShield = !inSequence && swapIntent !== null && privacyOn && privateStatus === "ready" && !holdBlocked && receivedText !== null && BigInt(receivedText) > 0n;
@@ -108,7 +111,6 @@ export function TxDialog() {
       shieldSpec({
         network: spec.network,
         signer: spec.signer,
-        demo: spec.demo,
         assetMint: swapIntent.outputMint,
         symbol,
         decimals: swapIntent.outputDecimals,
@@ -131,7 +133,6 @@ export function TxDialog() {
                 </p>
               ) : null}
               <h2 id="tx-title">{spec.title}</h2>
-              {spec.demo ? <span className="chip chip-warn" style={{ marginTop: 8 }}>Demo: nothing will be signed or sent</span> : null}
             </div>
             <button type="button" className="icon-btn" aria-label={inFlight ? "Hide; tracking continues" : "Close"} onClick={closeAll}>
               <Icon name="close" size={18} />
@@ -146,6 +147,12 @@ export function TxDialog() {
             ))}
           </ol>
 
+          {pastReview ? (
+            <div className={styles.ringBox} data-ring="tx">
+              <RingArt mode={ringModeFor(s.phase)} tone={ringToneFor(spec.kind) ?? "public"} detail="compact" />
+            </div>
+          ) : null}
+
           {s.phase === "quoting" ? (
             <div style={{ display: "flex", gap: 10, alignItems: "center", color: "var(--text-2)", fontSize: "var(--fs-small)" }} role="status">
               <Spinner size={16} /> Preparing the exact transaction and checking it…
@@ -157,14 +164,14 @@ export function TxDialog() {
           {s.phase === "completed" ? (
             <div style={{ display: "grid", gap: 12 }} role="status">
               <div className={styles.receiptHead}>
-                <Icon name="check" size={18} /> {spec.demo ? "Simulated" : "Confirmed"}
+                <Icon name="check" size={18} /> Confirmed
               </div>
               {s.receipt ? <ReviewRows rows={s.receipt} /> : null}
-              {s.signature ? <ExplorerLinks signature={s.signature} network={spec.network} /> : null}
+              {s.signature ? <ExplorerLinks signature={s.signature} /> : null}
             </div>
           ) : null}
 
-          {s.built && s.phase !== "completed" ? (
+          {s.built && !pastReview ? (
             <section aria-label="Disclosure">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
                 <span style={{ fontSize: "var(--fs-small)", fontWeight: 560 }}>{spec.disclosure.summary}</span>
@@ -176,7 +183,7 @@ export function TxDialog() {
             </section>
           ) : null}
 
-          {s.inspection || s.simulation || s.violations.length > 0 ? (
+          {!pastReview && (s.inspection || s.simulation || s.violations.length > 0) ? (
             <div className={styles.checks} aria-label="Checks">
               {s.inspection ? (
                 <div className={styles.check} data-ok={s.violations.length === 0}>
@@ -301,7 +308,7 @@ export function TxDialog() {
               </>
             ) : inFlight ? (
               <button type="button" className="btn btn-primary" disabled data-busy="true">
-                <Spinner size={16} /> {s.phase === "preparing" ? "Waiting for your wallet" : s.phase === "submitting" ? "Submitting" : "Confirming"}
+                {s.phase === "preparing" ? "Waiting for your wallet" : s.phase === "submitting" ? "Sending" : "Confirming"}
               </button>
             ) : (
               <>

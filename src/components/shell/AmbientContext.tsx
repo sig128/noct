@@ -1,9 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useCapabilities, useDefaultTokens, useEarnMarkets, useMintFacts, useVaults } from "@/lib/client/hooks";
-import { usePrivate, useSettings, useSwapDraft } from "@/lib/client/stores";
+import { useSwapDraft } from "@/lib/client/stores";
 import { tokenCapabilities } from "@/lib/capabilities";
 import { annotateIdentity } from "@/lib/tokens/identity";
 import { assessTokenRisk } from "@/lib/tokens/risk";
@@ -16,8 +15,6 @@ import { ApiError } from "@/lib/client/api";
 import styles from "./shell.module.css";
 import swap from "@/components/swap/swap.module.css";
 
-const Rosette = dynamic(() => import("./Rosette").then((m) => m.Rosette), { ssr: false });
-
 function compactUsd(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "Not reported";
   if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
@@ -27,13 +24,11 @@ function compactUsd(n: number | null): string {
 }
 
 export function AmbientContext() {
-  const privateStatus = usePrivate((s) => s.status);
   return (
     <div className={styles.ambient}>
+      {/* The ring's place beside the swap; RingStage draws it here. */}
       <div className={styles.ambientLayer} aria-hidden="true">
-        <div className={styles.ambientArt}>
-          <Rosette tone={privateStatus === "ready" ? "private" : "neutral"} />
-        </div>
+        <div className={styles.ambientArt} data-ring-anchor />
       </div>
       <TokenDossier />
     </div>
@@ -44,8 +39,6 @@ export function AmbientContext() {
 function TokenDossier() {
   const output = useSwapDraft((s) => s.output);
   const input = useSwapDraft((s) => s.input);
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const defaults = useDefaultTokens();
   const facts = useMintFacts(output?.mint);
   const caps = useCapabilities();
@@ -55,7 +48,7 @@ function TokenDossier() {
 
   const token = output;
   // Route state for this pair, read from quotes the swap card already fetched (no new request).
-  const pairKey = useMemo(() => ["quote", demo, network, input?.mint, output?.mint], [demo, network, input?.mint, output?.mint]);
+  const pairKey = useMemo(() => ["quote", input?.mint, output?.mint], [input?.mint, output?.mint]);
   const subscribe = useCallback((cb: () => void) => qc.getQueryCache().subscribe(cb), [qc]);
   const route = useSyncExternalStore(
     subscribe,
@@ -76,7 +69,7 @@ function TokenDossier() {
 
   if (!token) return null;
 
-  const privacyNet = demo ? { enabled: true, reason: null } : caps.data ? { enabled: caps.data.privacy[network].enabled, reason: caps.data.privacy[network].reason } : { enabled: false, reason: "Checking configuration…" };
+  const privacyNet = caps.data ? { enabled: caps.data.privacy.enabled, reason: caps.data.privacy.reason } : { enabled: false, reason: "Checking configuration…" };
   const { capabilities } = tokenCapabilities({
     mint: token.mint,
     route,

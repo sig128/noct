@@ -41,8 +41,8 @@ export interface TokenInfo {
   launchpad: string | null;
   createdAt: string | null;
   updatedAt: string | null;
-  /** Earn APY reported in token search (Jupiter Lend), informational only. */
-  source: "jupiter" | "demo";
+  /** Where the metadata came from. */
+  source: "jupiter";
 }
 
 export type RiskLevel = "info" | "caution" | "danger";

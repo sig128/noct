@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatAmount, formatUnits, formatUsd, parseDecimalRatio, parseUnits, valueOf } from "@/lib/decimal";
 import { useCapabilities, useDefaultTokens, useMintFacts, useNow, usePrices, usePublicBalances, useEpoch, publicBalanceOf } from "@/lib/client/hooks";
+import { NETWORK } from "@/lib/operations/intent";
 import { usePrivate, useSettings, useSwapDraft, useWallet } from "@/lib/client/stores";
 import { txFlow, useTxFlow } from "@/lib/client/tx-flow";
 import { swapSpec, rateText } from "@/lib/client/swap-spec";
@@ -33,8 +34,6 @@ function usd(amount: bigint | null, token: TokenInfo | null, price: string | und
 
 export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
   const { input, output, amountText, requestedPrivacy, set } = useSwapDraft();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const slippage = useSettings((s) => s.slippageBps);
   const address = useWallet((s) => s.address);
   const privateStatus = usePrivate((s) => s.status);
@@ -55,15 +54,6 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
     const usdc = list.find((t) => t.mint === USDC_MINT);
     if (!input && !output && sol && usdc) set({ input: sol, output: usdc });
   }, [defaults.data, input, output, set]);
-
-  // Token metadata changes with demo mode; drop selections from the other world.
-  const demoRef = useRef(demo);
-  useEffect(() => {
-    if (demoRef.current !== demo) {
-      demoRef.current = demo;
-      set({ input: null, output: null, amountText: "" });
-    }
-  }, [demo, set]);
 
   const balances = usePublicBalances();
   const prices = usePrices([input?.mint, output?.mint]);
@@ -109,8 +99,8 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
   // Three separately signed steps: move out (public), swap on Jupiter (public),
   // move back in (public deposit). Only the balance is private afterwards.
   const privateMode = requestedPrivacy !== "public";
-  const privacyOn = demo || Boolean(caps.data?.privacy[network].enabled);
-  const privacyReason = demo ? null : (caps.data?.privacy[network].reason ?? "Checking this deployment's configuration.");
+  const privacyOn = Boolean(caps.data?.privacy.enabled);
+  const privacyReason = caps.data?.privacy.reason ?? "Checking this deployment's configuration.";
   const privateOf = (mint: string | undefined) => (mint && privateStatus === "ready" ? (privateBalances.find((b) => b.mint === mint)?.amount ?? 0n) : null);
   const privateInput = privateOf(input?.mint);
   const privateOutput = privateOf(output?.mint);
@@ -130,9 +120,8 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
           label: `move ${inSym} out`,
           spec: () =>
             withdrawalSpec({
-              network,
+              network: NETWORK,
               signer: address,
-              demo,
               assetMint: input.mint,
               symbol: inSym,
               decimals: input.decimals,
@@ -153,9 +142,8 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
               output,
               amount,
               slippageBps: slippage,
-              network,
+              network: NETWORK,
               signer: address,
-              demo,
               inputBalance: (inputBalance ?? 0n) + amount,
               outputTransferFeeBps: outFee?.basisPoints ?? null,
               onSettled: refetch,
@@ -167,9 +155,8 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
             const received = BigInt(outputs.received ?? outputs.minimum ?? "0");
             if (received <= 0n) throw new Error(`The amount of ${outSym} received is not known yet. Check your wallet, then move it from Balance.`);
             return shieldSpec({
-              network,
+              network: NETWORK,
               signer: address,
-              demo,
               assetMint: output.mint,
               symbol: outSym,
               decimals: output.decimals,
@@ -203,15 +190,14 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
   else if (input.mint === output.mint) action = { label: "Choose two different tokens", disabled: true };
   else if (!amountText || amount === null)
     action = { label: parsed && !parsed.ok && parsed.reason === "too_large" ? "Amount too large" : "Enter an amount", disabled: true };
-  else if (quoteState.status === "wrong_network") action = { label: "Swaps need mainnet", disabled: true, hint: quoteState.error ?? undefined };
   else if (blocked) action = { label: "This token cannot be moved", disabled: true, hint: blocked.message };
-  else if (!address) action = { label: demo ? "Use the demo wallet" : "Connect wallet to swap", disabled: false, onClick: () => useWallet.getState().set({ pickerOpen: true }) };
+  else if (!address) action = { label: "Connect wallet to swap", disabled: false, onClick: () => useWallet.getState().set({ pickerOpen: true }) };
   else if (privateMode) {
     if (!privacyOn) action = { label: "Private balance is off here", disabled: true, hint: privacyReason ?? undefined };
     else if (privateStatus !== "ready") action = { label: "Unlock your private balance", disabled: false, onClick: () => router.push("/balance") };
     else if (privateInput !== null && amount > privateInput) action = { label: `Not enough ${input.symbol} in your private balance`, disabled: true };
     else if (outputHoldBlocked) action = { label: `${output.symbol} can't be held privately`, disabled: true, hint: "This token's Token-2022 settings block private holding." };
-    else if (!demo && publicSol !== null && publicSol < MIN_FEE_LAMPORTS) action = { label: "Add a little SOL for fees", disabled: true, hint: "Your public wallet pays the network fee for each of the three steps." };
+    else if (publicSol !== null && publicSol < MIN_FEE_LAMPORTS) action = { label: "Add a little SOL for fees", disabled: true, hint: "Your public wallet pays the network fee for each of the three steps." };
     else action = quoteGate() ?? { label: "Review private-balance swap", disabled: flowOpen, onClick: startPrivateSwap };
   } else if (insufficient) action = { label: `Insufficient ${input.symbol}`, disabled: true, hint: input.mint === NATIVE_SOL_MINT ? "Keeps SOL back for fees and account rent." : undefined };
   else
@@ -225,9 +211,8 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
             output,
             amount: amount!,
             slippageBps: slippage,
-            network,
+            network: NETWORK,
             signer: address,
-            demo,
             inputBalance: input.mint === NATIVE_SOL_MINT ? max!.amount : inputBalance ?? 0n,
             outputTransferFeeBps: outFee?.basisPoints ?? null,
             onSettled: () => void balances.refetch(),
@@ -268,7 +253,6 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
           <Heading id="swap-heading" className={styles.title} tabIndex={-1}>
             Swap
           </Heading>
-          {demo ? <span className={`chip chip-warn ${styles.demoTag}`}>Demo</span> : null}
         </div>
         <div className={styles.headTools}>
           <button

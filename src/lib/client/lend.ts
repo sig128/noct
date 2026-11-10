@@ -128,12 +128,6 @@ async function sendAndConfirm(network: Network, signed: Uint8Array, signature: s
   return { status: "confirmed", signature: sig!, rows: fee !== null ? [{ label: "Network fee", value: lamportsText(fee) }] : [] };
 }
 
-function demoResult(): Promise<SubmitResult> {
-  return new Promise((r) =>
-    setTimeout(() => r({ status: "confirmed", signature: `demo-${Math.random().toString(36).slice(2, 10)}`, rows: [{ label: "Result", value: "Simulated in Demo mode. Nothing was sent.", tone: "warn" }] }), 800),
-  );
-}
-
 export function earnSpec(p: {
   action: "deposit" | "withdraw";
   market: EarnMarket;
@@ -141,7 +135,6 @@ export function earnSpec(p: {
   available: bigint;
   network: Network;
   signer: string;
-  demo: boolean;
   onSettled(): void;
 }): TxSpec {
   const verb = p.action === "deposit" ? "Supply" : "Withdraw";
@@ -150,20 +143,15 @@ export function earnSpec(p: {
     title: `${verb} ${p.market.assetSymbol} ${p.action === "deposit" ? "to" : "from"} Jupiter Lend`,
     network: p.network,
     signer: p.signer,
-    demo: p.demo,
     disclosure: PROFILES.earnSupply,
     requestedPrivacy: "public",
     activityDetail: `${formatAmount(p.amount, p.market.decimals)} ${p.market.assetSymbol}`,
-    primaryLabel: p.demo ? `Simulate ${verb.toLowerCase()}` : `Sign and ${verb.toLowerCase()}`,
+    primaryLabel: `Sign and ${verb.toLowerCase()}`,
     reserve: p.action === "deposit" ? { mint: p.market.assetMint, amount: p.amount, source: "public", available: p.available } : undefined,
     async build({ operationId }) {
-      let wire: Uint8Array = new Uint8Array();
-      let lastValidBlockHeight: bigint | null = null;
-      if (!p.demo) {
-        const built = await api.earnTx({ action: p.action, asset: p.market.assetMint, signer: p.signer, amount: p.amount });
-        wire = base64ToBytes(built.transaction);
-        lastValidBlockHeight = (await solanaRpc.getLatestBlockhash(p.network)).lastValidBlockHeight;
-      }
+      const built = await api.earnTx({ action: p.action, asset: p.market.assetMint, signer: p.signer, amount: p.amount });
+      const wire = base64ToBytes(built.transaction);
+      const { lastValidBlockHeight } = await solanaRpc.getLatestBlockhash(p.network);
       const shares = previewShares(p.market, p.amount);
       const intent: EarnIntent = {
         kind: p.action === "deposit" ? "earnDeposit" : "earnWithdraw",
@@ -197,7 +185,7 @@ export function earnSpec(p: {
       return { wire, lastValidBlockHeight, intent, rows, expiresAt: intent.expiresAt };
     },
     policy: () => ({ feePayer: p.signer, allowedPrograms: EARN_PROGRAMS, maxSigners: 1, allowedVersions: [0, "legacy"] }),
-    submit: (signed) => (p.demo ? demoResult() : sendAndConfirm(p.network, signed, null)),
+    submit: (signed) => sendAndConfirm(p.network, signed, null),
     onSettled: p.onSettled,
   };
 }
@@ -217,7 +205,6 @@ export function borrowSpec(p: {
   repayAll?: boolean;
   network: Network;
   signer: string;
-  demo: boolean;
   available: bigint;
   onSettled(): void;
 }): TxSpec {
@@ -235,11 +222,10 @@ export function borrowSpec(p: {
     title: `${p.collateralSymbol}/${p.debtSymbol}: ${describe()}`,
     network: p.network,
     signer: p.signer,
-    demo: p.demo,
     disclosure: PROFILES.externalBorrow,
     requestedPrivacy: "public",
     activityDetail: describe(),
-    primaryLabel: p.demo ? "Simulate" : "Sign and submit",
+    primaryLabel: "Sign and submit",
     reserve:
       p.collateralDelta > 0n
         ? { mint: p.vault.collateralMint, amount: p.collateralDelta, source: "public", available: p.available }
@@ -247,15 +233,11 @@ export function borrowSpec(p: {
           ? { mint: p.vault.debtMint, amount: -p.debtDelta, source: "public", available: p.available }
           : undefined,
     async build({ operationId }) {
-      let wire: Uint8Array = new Uint8Array();
-      let lastValidBlockHeight: bigint | null = null;
       const colAmount = p.collateralDelta.toString();
       const debtAmount = p.repayAll ? MIN_I128 : p.debtDelta.toString();
-      if (!p.demo) {
-        const built = await api.operate({ vaultId: p.vault.vaultId, positionId: p.positionId, signer: p.signer, colAmount, debtAmount });
-        wire = base64ToBytes(built.transaction);
-        lastValidBlockHeight = (await solanaRpc.getLatestBlockhash(p.network)).lastValidBlockHeight;
-      }
+      const built = await api.operate({ vaultId: p.vault.vaultId, positionId: p.positionId, signer: p.signer, colAmount, debtAmount });
+      const wire = base64ToBytes(built.transaction);
+      const { lastValidBlockHeight } = await solanaRpc.getLatestBlockhash(p.network);
       const intent: BorrowIntent = {
         kind: "borrowOperate",
         operationId,
@@ -288,31 +270,26 @@ export function borrowSpec(p: {
       return { wire, lastValidBlockHeight, intent, rows, expiresAt: intent.expiresAt };
     },
     policy: () => ({ feePayer: p.signer, allowedPrograms: BORROW_PROGRAMS, maxSigners: 1, allowedVersions: [0, "legacy"] }),
-    submit: (signed) => (p.demo ? demoResult() : sendAndConfirm(p.network, signed, null)),
+    submit: (signed) => sendAndConfirm(p.network, signed, null),
     onSettled: p.onSettled,
   };
 }
 
-export function wrapSpec(p: { action: "wrap" | "unwrap"; lamports: bigint; network: Network; signer: string; demo: boolean; onSettled(): void }): TxSpec {
+export function wrapSpec(p: { action: "wrap" | "unwrap"; lamports: bigint; network: Network; signer: string; onSettled(): void }): TxSpec {
   const programs = [PROGRAMS.system, PROGRAMS.token, PROGRAMS.associatedToken];
   return {
     kind: "earnDeposit",
     title: p.action === "wrap" ? "Wrap SOL" : "Unwrap SOL",
     network: p.network,
     signer: p.signer,
-    demo: p.demo,
     disclosure: { ...PROFILES.publicSwap, id: "wrap", summary: "Public wallet transaction.", metadataExposure: ["NOCT's server relays the transaction to the RPC and sees its timing"], dependencies: ["Solana RPC"], evidence: [] },
     requestedPrivacy: "public",
     activityDetail: p.action === "wrap" ? `${formatAmount(p.lamports, 9)} SOL` : "All wrapped SOL",
-    primaryLabel: p.demo ? "Simulate" : "Sign",
+    primaryLabel: "Sign",
     async build({ operationId }) {
-      let wire: Uint8Array = new Uint8Array();
-      let lastValidBlockHeight: bigint | null = null;
-      if (!p.demo) {
-        const bh = await solanaRpc.getLatestBlockhash(p.network);
-        lastValidBlockHeight = bh.lastValidBlockHeight;
-        wire = p.action === "wrap" ? await buildWrapSolTransaction({ owner: p.signer, lamports: p.lamports, ...bh }) : await buildUnwrapSolTransaction({ owner: p.signer, ...bh });
-      }
+      const bh = await solanaRpc.getLatestBlockhash(p.network);
+      const lastValidBlockHeight = bh.lastValidBlockHeight;
+      const wire = p.action === "wrap" ? await buildWrapSolTransaction({ owner: p.signer, lamports: p.lamports, ...bh }) : await buildUnwrapSolTransaction({ owner: p.signer, ...bh });
       return {
         wire,
         lastValidBlockHeight,
@@ -340,7 +317,7 @@ export function wrapSpec(p: { action: "wrap" | "unwrap"; lamports: bigint; netwo
       };
     },
     policy: () => ({ feePayer: p.signer, allowedPrograms: programs, maxSigners: 1, allowedVersions: [0] }),
-    submit: (signed) => (p.demo ? demoResult() : sendAndConfirm(p.network, signed, null)),
+    submit: (signed) => sendAndConfirm(p.network, signed, null),
     onSettled: p.onSettled,
   };
 }

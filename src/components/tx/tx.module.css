@@ -71,6 +71,14 @@
   margin: 0;
 }
 
+/* The ring while the transaction is on its way, and its glow once it lands. */
+.ringBox {
+  justify-self: center;
+  width: min(176px, 46vw);
+  aspect-ratio: 1;
+  margin: -6px 0 -4px;
+}
+
 .checks {
   display: grid;
   gap: 6px;

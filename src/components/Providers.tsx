@@ -3,7 +3,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { usePrivate, useSettings, useWallet } from "@/lib/client/stores";
-import { invalidateSession } from "@/lib/client/session";
 
 function InactivityLock() {
   const minutes = useSettings((s) => s.lockAfterMinutes);
@@ -24,20 +23,6 @@ function InactivityLock() {
       events.forEach((e) => window.removeEventListener(e, arm));
     };
   }, [minutes, status]);
-  return null;
-}
-
-function NetworkWatcher() {
-  const network = useSettings((s) => s.network);
-  const demo = useSettings((s) => s.demoMode);
-  useEffect(() => {
-    let first = true;
-    return useSettings.subscribe((s, prev) => {
-      if (first) first = false;
-      if (s.network !== prev.network) invalidateSession(`Switched to ${s.network}. Private views were cleared.`);
-      if (s.demoMode !== prev.demoMode) invalidateSession(s.demoMode ? "Demo mode on. Live views were cleared." : "Demo mode off. Demo data was cleared.");
-    });
-  }, [network, demo]);
   return null;
 }
 
@@ -72,7 +57,6 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={client}>
       <Hydrate />
       <InactivityLock />
-      <NetworkWatcher />
       {children}
     </QueryClientProvider>
   );

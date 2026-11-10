@@ -8,7 +8,6 @@ import { buildSwapIntent, executeErrorMessage, networkCostLamports, normalizeOrd
 import type { TokenInfo } from "@/lib/tokens/types";
 import { base64ToBytes, bytesToBase64 } from "@/lib/tx/inspect";
 import { ROUTER_PROGRAMS } from "@/lib/tx/programs";
-import { demoQuote } from "@/lib/adapters/demo";
 import { api, ApiError } from "./api";
 import { solanaRpc } from "./rpc";
 import type { ReviewRow, TxSpec } from "./tx-flow";
@@ -38,7 +37,6 @@ export interface SwapSpecInput {
   slippageBps: number | null;
   network: Network;
   signer: string;
-  demo: boolean;
   inputBalance: bigint;
   /** Net amount after a Token-2022 transfer fee on the output, when known. */
   outputTransferFeeBps: number | null;
@@ -51,23 +49,16 @@ export function swapSpec(p: SwapSpecInput): TxSpec {
     title: `Swap ${p.input.symbol} for ${p.output.symbol}`,
     network: p.network,
     signer: p.signer,
-    demo: p.demo,
     disclosure: PROFILES.publicSwap,
     requestedPrivacy: "public",
     activityDetail: `${formatAmount(p.amount, p.input.decimals)} ${p.input.symbol} → ${p.output.symbol}`,
-    primaryLabel: p.demo ? "Simulate swap" : "Sign and swap",
+    primaryLabel: "Sign and swap",
     simulate: true,
     reserve: { mint: p.input.mint, amount: p.amount, source: "public", available: p.inputBalance },
     async build({ signal, operationId }) {
-      let raw;
-      if (p.demo) {
-        raw = { order: demoQuote(p.input.mint, p.output.mint, p.amount), receivedAt: Date.now() };
-        if (!raw.order) throw new Error("No demo route for this pair.");
-      } else {
-        raw = await api.order({ inputMint: p.input.mint, outputMint: p.output.mint, amount: p.amount, taker: p.signer, slippageBps: p.slippageBps }, signal);
-      }
+      const raw = await api.order({ inputMint: p.input.mint, outputMint: p.output.mint, amount: p.amount, taker: p.signer, slippageBps: p.slippageBps }, signal);
       const order = normalizeOrder(orderResponseSchema.parse(raw.order), raw.receivedAt);
-      if (!p.demo && !order.transaction) throw new Error(orderErrorMessage(order.router, order.errorCode, order.errorMessage));
+      if (!order.transaction) throw new Error(orderErrorMessage(order.router, order.errorCode, order.errorMessage));
       if (order.inAmount !== p.amount || order.inputMint !== p.input.mint || order.outputMint !== p.output.mint) {
         throw new Error("The order returned does not match the requested swap.");
       }
@@ -95,7 +86,7 @@ export function swapSpec(p: SwapSpecInput): TxSpec {
         { label: `${p.output.symbol} mint`, value: p.output.mint, wrap: true, tone: "muted" },
       ];
       return {
-        wire: order.transaction ? base64ToBytes(order.transaction) : new Uint8Array(),
+        wire: base64ToBytes(order.transaction),
         lastValidBlockHeight: order.lastValidBlockHeight,
         intent,
         rows,
@@ -115,16 +106,6 @@ export function swapSpec(p: SwapSpecInput): TxSpec {
       };
     },
     async submit(signed, built) {
-      if (p.demo) {
-        await new Promise((r) => setTimeout(r, 900));
-        const demoIntent = built.intent.kind === "swap" ? built.intent : null;
-        return {
-          status: "confirmed",
-          signature: `demo-${built.intent.operationId.slice(0, 8)}`,
-          rows: [{ label: "Result", value: "Simulated in Demo mode. No transaction was created or sent.", tone: "warn" }],
-          outputs: demoIntent ? { received: demoIntent.expectedOutput.toString(), minimum: demoIntent.minNetOutput.toString() } : undefined,
-        };
-      }
       let response;
       try {
         response = await api.execute({

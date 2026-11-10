@@ -13,7 +13,7 @@ export interface ModuleDef {
 
 /** Rail order is fixed by the product brief. */
 export const MODULES: readonly ModuleDef[] = [
-  { id: "swap", label: "Swap", short: "Swap", href: "/", icon: "swap" },
+  { id: "swap", label: "Swap", short: "Swap", href: "/swap", icon: "swap" },
   { id: "balance", label: "Balance", short: "Balance", href: "/balance", icon: "balance" },
   { id: "send", label: "Send and receive", short: "Send", href: "/send", icon: "send" },
   { id: "earn", label: "Earn", short: "Earn", href: "/earn", icon: "earn" },
@@ -22,6 +22,7 @@ export const MODULES: readonly ModuleDef[] = [
   { id: "settings", label: "Settings and security", short: "Settings", href: "/settings", icon: "shield" },
 ];
 
+/** "/" is the landing page, which shows the swap behind it; every other path names a tool. */
 export function moduleFromPath(pathname: string | null): ModuleId {
   const seg = (pathname ?? "/").split("/")[1] ?? "";
   const hit = MODULES.find((m) => m.href === `/${seg}`);

@@ -34,8 +34,8 @@ This document states what NOCT trusts, what it defends against, and where its pr
 - Content Security Policy: `default-src 'self'`; `connect-src 'self'` (every provider call goes through the server); `img-src 'self' data: blob:`; `frame-ancestors 'none'`; `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`. Also `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin`, a restrictive `Permissions-Policy`, and HSTS in production.
 - Token metadata is untrusted: bidirectional overrides and zero-width characters are stripped, lengths bounded, everything rendered as text. No `dangerouslySetInnerHTML` in the codebase.
 - Impostor defence: ticker skeletons catch confusable symbols (for example a second "BONK" or "B0NK"); unverified tokens that reuse a verified ticker are flagged "Not the verified …"; selecting a token with a danger-level flag requires a confirmation step that shows its full mint, and every review shows both full mints.
-- Private state (derived keys, balances, history, addresses, amounts) lives in memory and is cleared on lock: manually, after inactivity, when the tab is hidden (if chosen), on page unload, and on any wallet, network or demo-mode change.
-- Network reads wait for persisted settings to load, so a page opened in demo mode never sends a live request.
+- Private state (derived keys, balances, history, addresses, amounts) lives in memory and is cleared on lock: manually, after inactivity, when the tab is hidden (if chosen), on page unload, and on any wallet or account change.
+- Network reads wait for persisted settings to load, so quotes use the stored slippage from the first request. Preferences stored by older versions (a network choice, a demo switch) are dropped on load; NOCT runs on mainnet only.
 - External explorer links open with `rel="noopener noreferrer"`.
 
 ## Wallet interaction

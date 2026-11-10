@@ -10,26 +10,22 @@ export async function GET(req: NextRequest) {
   if (limited) return limited;
   const env = serverEnv();
   const heliusKey = Boolean(env.HELIUS_API_KEY);
+  const switchedOn = env.SPR_MAINNET_ENABLED === "true";
   return NextResponse.json({
     verifiedOn: "2026-11-10",
+    network: "mainnet",
     jupiter: { base: new URL(env.JUPITER_API_BASE).host, keyed: Boolean(env.JUPITER_API_KEY) },
-    rpc: {
-      mainnet: { publicDefault: rpcIsDefaultPublic("mainnet") },
-      devnet: { publicDefault: rpcIsDefaultPublic("devnet") },
-    },
+    rpc: { publicDefault: rpcIsDefaultPublic() },
     pyth: { configured: Boolean(env.PYTH_API_KEY) },
     privacy: {
       sdk: "@heliuslabs/spr@0.9.0-alpha",
-      devnet: { configured: heliusKey, enabled: heliusKey, reason: heliusKey ? null : "Set HELIUS_API_KEY on the server to use private balances." },
-      mainnet: {
-        configured: heliusKey,
-        enabled: heliusKey && env.SPR_MAINNET_ENABLED === "true",
-        reason: !heliusKey
-          ? "Set HELIUS_API_KEY on the server to use private balances."
-          : env.SPR_MAINNET_ENABLED !== "true"
-            ? "Mainnet private balances are switched off on this deployment. The operator turns them on with SPR_MAINNET_ENABLED=true."
-            : null,
-      },
+      configured: heliusKey,
+      enabled: heliusKey && switchedOn,
+      reason: !heliusKey
+        ? "Set HELIUS_API_KEY on the server to use private balances."
+        : !switchedOn
+          ? "Private balances are switched off on this deployment. The operator turns them on with SPR_MAINNET_ENABLED=true."
+          : null,
     },
   });
 }

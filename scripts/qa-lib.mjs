@@ -3,6 +3,8 @@ import { chromium } from "playwright-core";
 import { generateKeyPair, getAddressFromPublicKey } from "@solana/kit";
 
 export const BASE = process.env.QA_BASE ?? "http://127.0.0.1:3100";
+/** The app itself; "/" is the landing page. */
+export const APP = `${BASE}/swap`;
 export const CHROME = process.env.QA_CHROME ?? "/usr/bin/google-chrome";
 
 export const VIEWPORTS = {
@@ -26,14 +28,14 @@ export async function testWallet() {
  */
 export function walletInitScript({ address, publicKey, supportsV1 = false, rejectSign = false, delayMs = 0 }) {
   return `(() => {
-    const account = Object.freeze({ address: ${JSON.stringify(address)}, publicKey: new Uint8Array(${JSON.stringify(publicKey)}), chains: ["solana:mainnet", "solana:devnet"], features: ["solana:signTransaction", "solana:signMessage"] });
+    const account = Object.freeze({ address: ${JSON.stringify(address)}, publicKey: new Uint8Array(${JSON.stringify(publicKey)}), chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] });
     const listeners = new Set();
     const fakeSign = (bytes) => { const out = new Uint8Array(bytes); for (let i = 1; i <= 64; i++) out[i] = 0x5a; return out; };
     const wallet = {
       version: "1.0.0",
       name: "QA Test Wallet",
       icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAzMiAzMic+PHJlY3Qgd2lkdGg9JzMyJyBoZWlnaHQ9JzMyJyByeD0nOCcgZmlsbD0nIzJhMzEzNScvPjxjaXJjbGUgY3g9JzE2JyBjeT0nMTYnIHI9JzYnIGZpbGw9JyNkOGY5OGEnLz48L3N2Zz4=",
-      chains: ["solana:mainnet", "solana:devnet"],
+      chains: ["solana:mainnet"],
       get accounts() { return window.__qaConnected ? [account] : []; },
       features: {
         "standard:connect": { version: "1.0.0", connect: async () => { window.__qaConnected = true; return { accounts: [account] }; } },
@@ -50,8 +52,10 @@ export function walletInitScript({ address, publicKey, supportsV1 = false, rejec
   })();`;
 }
 
+export const DEFAULT_SETTINGS = { maskBalances: false, lockAfterMinutes: 10, slippageBps: null };
+
 export function settingsInitScript(settings) {
-  return `try { localStorage.setItem("noct.settings.v1", ${JSON.stringify(JSON.stringify({ state: settings, version: 1 }))}); } catch (e) {}`;
+  return `try { localStorage.setItem("noct.settings.v1", ${JSON.stringify(JSON.stringify({ state: { ...DEFAULT_SETTINGS, ...settings }, version: 2 }))}); } catch (e) {}`;
 }
 
 export async function launch() {

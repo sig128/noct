@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatAmount } from "@/lib/decimal";
-import { useActivity, usePrivate, useSettings } from "@/lib/client/stores";
+import { useActivity, usePrivate } from "@/lib/client/stores";
 import { useTokensByMint } from "@/lib/client/hooks";
 import { NATIVE_SOL_MINT } from "@/lib/tokens/types";
 import { ModulePanel } from "@/components/shell/ModulePanel";
@@ -42,7 +42,6 @@ function csvCell(v: string): string {
 export function ActivityPanel() {
   const items = useActivity((s) => s.items);
   const priv = usePrivate();
-  const demo = useSettings((s) => s.demoMode);
   const tokens = useTokensByMint(priv.history.map((h) => h.asset));
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -72,7 +71,7 @@ export function ActivityPanel() {
   };
 
   return (
-    <ModulePanel id="activity" title="Activity" lead="This session's operations and, when unlocked, your private history. Nothing here is stored on a server or kept after you lock." badge={demo ? <span className="chip chip-warn">Demo data</span> : null}>
+    <ModulePanel id="activity" title="Activity" lead="This session's operations and, when unlocked, your private history. Nothing here is stored on a server or kept after you lock.">
       <section className={styles.section} aria-labelledby="session-h">
         <div className={styles.sectionHead}>
           <h2 id="session-h" className={styles.h2}>
@@ -94,11 +93,10 @@ export function ActivityPanel() {
                     </span>
                     <span>{new Date(i.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                     <span>{i.privacyClass === "public" ? "Public" : "Amounts hidden"}</span>
-                    {i.demo ? <span style={{ color: "var(--warn)" }}>Demo</span> : null}
                   </div>
                   {i.signature ? (
                     <div style={{ marginTop: 6 }}>
-                      <ExplorerLinks signature={i.signature} network={i.network} />
+                      <ExplorerLinks signature={i.signature} />
                     </div>
                   ) : null}
                 </div>

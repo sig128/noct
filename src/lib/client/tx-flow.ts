@@ -23,7 +23,7 @@ export interface ReviewRow {
 }
 
 export interface BuiltTx {
-  /** Unsigned wire transaction; empty in demo mode. */
+  /** Unsigned wire transaction, exactly as the wallet will be asked to sign it. */
   wire: Uint8Array;
   lastValidBlockHeight: bigint | null;
   intent: OperationIntent;
@@ -44,7 +44,6 @@ export interface TxSpec {
   title: string;
   network: Network;
   signer: string;
-  demo: boolean;
   disclosure: DisclosureProfile;
   requestedPrivacy: PrivacyClass;
   /** Shown when the prepared operation is weaker than requested; must be accepted explicitly. */
@@ -169,7 +168,6 @@ export const txFlow = {
       phase: "quoting",
       signature: null,
       createdAt: Date.now(),
-      demo: spec.demo,
       note: null,
     });
     await txFlow.build();
@@ -182,22 +180,18 @@ export const txFlow = {
     try {
       const built = await spec.build({ signal: controller.signal, operationId });
       if (controller.signal.aborted || get().operationId !== operationId) return;
-      let inspection: InspectedTransaction | null = null;
-      let violations: string[] = [];
+      const inspection: InspectedTransaction = inspectTransactionBytes(built.wire);
+      const policy = spec.policy?.(built);
+      const violations: string[] = policy ? checkTransactionPolicy(inspection, policy).violations : [];
       let simulation: TxFlowState["simulation"] = null;
-      if (!spec.demo) {
-        inspection = inspectTransactionBytes(built.wire);
-        const policy = spec.policy?.(built);
-        if (policy) violations = checkTransactionPolicy(inspection, policy).violations;
-        if (spec.simulate !== false && violations.length === 0) {
-          try {
-            const sim = await solanaRpc.simulate(spec.network, bytesToBase64(built.wire));
-            simulation = sim.err
-              ? { ok: false, message: simulationMessage(sim.err, sim.logs), units: sim.unitsConsumed }
-              : { ok: true, message: "Simulation passed against current chain state.", units: sim.unitsConsumed };
-          } catch {
-            simulation = { ok: false, message: "Simulation could not run. NOCT will not ask you to sign an unsimulated transaction.", units: null };
-          }
+      if (spec.simulate !== false && violations.length === 0) {
+        try {
+          const sim = await solanaRpc.simulate(spec.network, bytesToBase64(built.wire));
+          simulation = sim.err
+            ? { ok: false, message: simulationMessage(sim.err, sim.logs), units: sim.unitsConsumed }
+            : { ok: true, message: "Simulation passed against current chain state.", units: sim.unitsConsumed };
+        } catch {
+          simulation = { ok: false, message: "Simulation could not run. NOCT will not ask you to sign an unsimulated transaction.", units: null };
         }
       }
       journal.move(operationId, "review");
@@ -231,7 +225,7 @@ export const txFlow = {
     if (!spec || !built || !operationId) return;
     if (!txFlow.canApprove().ok) return;
     const wallet = useWallet.getState();
-    if (!spec.demo && (wallet.epoch !== s.walletEpoch || wallet.address !== spec.signer)) {
+    if (wallet.epoch !== s.walletEpoch || wallet.address !== spec.signer) {
       txFlow.cancel("The wallet or network changed. Nothing was signed.");
       return;
     }
@@ -261,42 +255,38 @@ export const txFlow = {
     }
 
     move("preparing");
+    if (!wallet.option || !wallet.account) {
+      reservations.release(operationId);
+      move("rejected");
+      set({ error: "Connect your wallet to sign." });
+      return;
+    }
     let signed: Uint8Array;
-    if (spec.demo) {
-      signed = new Uint8Array();
-    } else {
-      if (!wallet.option || !wallet.account) {
+    try {
+      signed = await signTransaction(wallet.option, wallet.account, built.wire, spec.network);
+    } catch (error) {
+      reservations.release(operationId);
+      move("rejected", "Signature declined");
+      set({ error: error instanceof WalletActionError ? error.message : "The wallet could not sign." });
+      return;
+    }
+    // The wallet may not alter what was reviewed unless the result still passes policy.
+    const before = getTransactionDecoder().decode(built.wire).messageBytes;
+    const after = getTransactionDecoder().decode(signed).messageBytes;
+    const same = before.length === after.length && before.every((b, i) => b === after[i]);
+    if (!same) {
+      const policy = spec.policy?.(built);
+      const recheck = policy ? checkTransactionPolicy(inspectTransactionBytes(signed), policy) : { ok: false, violations: ["No policy"] };
+      if (!recheck.ok) {
         reservations.release(operationId);
-        move("rejected");
-        set({ error: "Connect your wallet to sign." });
+        move("rejected", "Wallet modified the transaction");
+        set({ error: "Your wallet changed the transaction after review in a way NOCT cannot verify. Nothing was sent." });
         return;
       }
-      try {
-        signed = await signTransaction(wallet.option, wallet.account, built.wire, spec.network);
-      } catch (error) {
-        reservations.release(operationId);
-        move("rejected", "Signature declined");
-        set({ error: error instanceof WalletActionError ? error.message : "The wallet could not sign." });
-        return;
-      }
-      // The wallet may not alter what was reviewed unless the result still passes policy.
-      const before = getTransactionDecoder().decode(built.wire).messageBytes;
-      const after = getTransactionDecoder().decode(signed).messageBytes;
-      const same = before.length === after.length && before.every((b, i) => b === after[i]);
-      if (!same) {
-        const policy = spec.policy?.(built);
-        const recheck = policy ? checkTransactionPolicy(inspectTransactionBytes(signed), policy) : { ok: false, violations: ["No policy"] };
-        if (!recheck.ok) {
-          reservations.release(operationId);
-          move("rejected", "Wallet modified the transaction");
-          set({ error: "Your wallet changed the transaction after review in a way NOCT cannot verify. Nothing was sent." });
-          return;
-        }
-        set({ note: "Your wallet adjusted the transaction; NOCT re-checked it against the same rules." });
-      }
+      set({ note: "Your wallet adjusted the transaction; NOCT re-checked it against the same rules." });
     }
 
-    const signature = spec.demo ? null : signatureOf(signed, s.inspection?.feePayer ?? spec.signer);
+    const signature = signatureOf(signed, s.inspection?.feePayer ?? spec.signer);
     move("submitting");
     if (signature) {
       journal.recordSubmission(operationId, signature, built.lastValidBlockHeight);

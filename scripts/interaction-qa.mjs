@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * Browser interaction checks: rail keyboard and pointer behaviour, previews,
- * module routing and focus, modal focus traps, touch navigation, reduced
- * motion, the full swap lifecycle against the local fixtures, duplicate-click
- * protection, wallet rejection, quote expiry, demo isolation and storage
- * hygiene. Run against a server backed by scripts/fixture-upstream.mjs.
+ * Browser interaction checks: the landing page and launch, rail keyboard and
+ * pointer behaviour, previews, module routing and focus, modal focus traps,
+ * touch navigation, reduced motion, the full swap lifecycle against the local
+ * fixtures (including the ring's states), duplicate-click protection, wallet
+ * rejection, quote expiry, mainnet-only relays and storage hygiene. Run
+ * against a server backed by scripts/fixture-upstream.mjs.
  *   QA_BASE=http://127.0.0.1:3100 node scripts/interaction-qa.mjs [filter] [--slow]
  */
-import { BASE, VIEWPORTS, launch, settle, settingsInitScript, testWallet, walletInitScript } from "./qa-lib.mjs";
+import { APP, BASE, VIEWPORTS, launch, settle, settingsInitScript, testWallet, walletInitScript } from "./qa-lib.mjs";
 
 const args = process.argv.slice(2);
 const SLOW = args.includes("--slow");
@@ -17,7 +18,6 @@ const wallet = await testWallet();
 const results = [];
 
 const DESKTOP = VIEWPORTS["1440"];
-const DEMO = { demoMode: true, network: "mainnet", maskBalances: false, lockAfterMinutes: 10, slippageBps: null };
 
 function assert(cond, message) {
   if (!cond) throw new Error(message);
@@ -72,10 +72,65 @@ async function openReview(page) {
   await page.getByRole("button", { name: "Sign and swap" }).waitFor({ timeout: 8000 });
 }
 
+// ---------------------------------------------------------------- landing
+
+const ringMode = (page, which) => page.evaluate((w) => document.querySelector(`[data-ring="${w}"] svg`)?.getAttribute("data-mode") ?? null, which);
+
+await check("landing: the ring, a plain description and Launch app; the app behind it is unreachable", async (page) => {
+  await page.goto(BASE);
+  await settle(page, 600);
+  await page.getByRole("heading", { level: 1, name: "noct" }).waitFor();
+  const text = await page.locator("body").innerText();
+  assert(/addresses stay visible/.test(text), "the landing does not say what stays visible");
+  assert(!/untraceable|zero trace|100% anonymous|\banonymous/i.test(text), "the landing makes an anonymity claim");
+  assert((await ringMode(page, "stage")) === "landing", "the ring is not in its landing state");
+  assert((await page.locator('[data-stage="landing"][inert]').count()) === 1, "the app behind the landing is not inert");
+  await page.keyboard.press("Tab");
+  const first = await page.evaluate(() => document.activeElement?.textContent?.trim());
+  assert(first === "Launch app", `first Tab stop on the landing was "${first}"`);
+});
+
+await check("landing: Launch app glides the ring into place, opens the swap and focuses it; Back returns", async (page) => {
+  await page.goto(BASE);
+  await settle(page, 600);
+  await page.getByRole("link", { name: "Launch app" }).click();
+  await page.waitForURL(APP);
+  await page.waitForTimeout(1600);
+  const focused = await page.evaluate(() => document.activeElement?.id);
+  assert(focused === "swap-heading", `focus after launch was on ${focused}`);
+  assert((await page.locator('[data-stage="app"]').count()) > 0, "the app did not finish launching");
+  assert((await page.getByRole("link", { name: "Launch app" }).count()) === 0, "the landing is still mounted");
+  const placed = await page.evaluate(() => {
+    const box = document.querySelector('[data-ring="stage"] > div')?.getBoundingClientRect();
+    const anchor = document.querySelector("[data-ring-anchor]")?.getBoundingClientRect();
+    if (!box || !anchor) return null;
+    return { dx: Math.abs(box.left + box.width / 2 - (anchor.left + anchor.width / 2)), dy: Math.abs(box.top + box.height / 2 - (anchor.top + anchor.height / 2)), dw: Math.abs(box.width - anchor.width) };
+  });
+  assert(placed && placed.dx < 3 && placed.dy < 3 && placed.dw < 3, `ring not at its place in the app: ${JSON.stringify(placed)}`);
+  await page.goBack();
+  await page.waitForURL(BASE + "/");
+  await page.getByRole("link", { name: "Launch app" }).waitFor({ timeout: 3000 });
+  assert((await ringMode(page, "stage")) === "landing", "the ring did not return to the landing");
+});
+
+await check("landing at 390 px: stacked, no horizontal overflow, launch works", async (page) => {
+  await page.goto(BASE);
+  await settle(page, 600);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  assert(overflow <= 0, `horizontal overflow of ${overflow}px`);
+  const slot = await page.locator("[data-ring-slot]").boundingBox();
+  const button = await page.getByRole("link", { name: "Launch app" }).boundingBox();
+  assert(slot && button && button.y > slot.y + slot.height - 1, "the words overlap the ring on a phone");
+  assert(button.height >= 44, "Launch app is smaller than a 44 px target");
+  await page.getByRole("link", { name: "Launch app" }).tap();
+  await page.waitForURL(APP);
+  await page.getByRole("heading", { level: 1, name: "Swap" }).waitFor({ timeout: 4000 });
+}, { context: VIEWPORTS["390"] });
+
 // ---------------------------------------------------------------- rail
 
 await check("rail: fixed order and accessible names", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   const rail = page.getByRole("navigation", { name: "Tools" });
   const labels = await rail.getByRole("link").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
@@ -85,7 +140,7 @@ await check("rail: fixed order and accessible names", async (page) => {
 });
 
 await check("rail: keyboard focus opens a preview to the left; arrows move; Escape closes and keeps focus", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await page.locator('[data-rail="swap"]').focus();
   for (let i = 0; i < 3; i += 1) await page.keyboard.press("ArrowDown");
@@ -104,7 +159,7 @@ await check("rail: keyboard focus opens a preview to the left; arrows move; Esca
 });
 
 await check("rail: ArrowLeft moves into the preview; Tab order is not trapped", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await page.locator('[data-rail="earn"]').focus();
   await preview(page).waitFor({ timeout: 2000 });
@@ -117,7 +172,7 @@ await check("rail: ArrowLeft moves into the preview; Tab order is not trapped", 
 });
 
 await check("rail: hover has an opening delay, survives moving into the preview, closes after leaving", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   const btn = page.locator('[data-rail="balance"]');
   const box = await btn.boundingBox();
@@ -136,7 +191,7 @@ await check("rail: hover has an opening delay, survives moving into the preview,
 });
 
 await check("rail: preview never covers the amount being edited", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await typeAmount(page, "2");
   const btn = page.locator('[data-rail="balance"]');
@@ -151,7 +206,7 @@ await check("rail: preview never covers the amount being edited", async (page) =
 }, { context: { viewport: { width: 900, height: 760 } } });
 
 await check("rail: click opens the module, focus moves to its heading, Escape returns focus to the rail", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await page.locator('[data-rail="earn"]').click();
   await page.waitForURL(/\/earn$/);
@@ -160,13 +215,13 @@ await check("rail: click opens the module, focus moves to its heading, Escape re
   const focusedHeading = await page.evaluate(() => document.activeElement?.tagName === "H1" && document.activeElement.textContent);
   assert(focusedHeading === "Earn", `focus after opening was ${focusedHeading}`);
   await page.keyboard.press("Escape");
-  await page.waitForURL(BASE + "/");
+  await page.waitForURL(APP);
   await page.waitForTimeout(200);
   assert((await activeInfo(page)).rail === "earn", "focus did not return to the Earn rail item");
 });
 
 await check("routing: unfinished swap survives module switches; back and forward behave", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await typeAmount(page, "1.25");
   await page.locator('[data-rail="balance"]').click();
@@ -176,17 +231,17 @@ await check("routing: unfinished swap survives module switches; back and forward
   await page.goBack();
   await page.waitForURL(/\/balance$/);
   await page.goBack();
-  await page.waitForURL(BASE + "/");
+  await page.waitForURL(APP);
   await page.goForward();
   await page.waitForURL(/\/balance$/);
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 200);
   // A full navigation starts clean; an in-app return keeps the draft.
   await typeAmount(page, "1.25");
   await page.locator('[data-rail="activity"]').click();
   await page.waitForURL(/\/activity$/);
   await page.locator('[data-rail="swap"]').click();
-  await page.waitForURL(BASE + "/");
+  await page.waitForURL(APP);
   const value = await page.locator("input[data-amount-input]").first().inputValue();
   assert(value === "1.25", `swap amount was "${value}" after switching modules`);
   assert(!/1\.25|amount/i.test(page.url()), "amount leaked into the URL");
@@ -204,7 +259,7 @@ await check("routing: deep links render their module and an unknown module is a 
 // ---------------------------------------------------------------- dialogs
 
 await check("token picker: modal traps focus, Escape restores focus to the token button", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   const trigger = page.getByRole("button", { name: /You receive: USDC/ });
   await trigger.click();
@@ -218,7 +273,7 @@ await check("token picker: modal traps focus, Escape restores focus to the token
 });
 
 await check("token picker: exact mint search finds the token; impostor ticker is flagged", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await page.getByRole("button", { name: /You receive: USDC/ }).click();
   const search = page.locator("input[type=search]");
@@ -233,7 +288,7 @@ await check("token picker: exact mint search finds the token; impostor ticker is
 // ---------------------------------------------------------------- touch
 
 await check("mobile: bottom navigation and More sheet open every module", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   assert(!(await page.locator('[data-rail="swap"]').isVisible()), "desktop rail visible at 390 px");
   const nav = page.getByRole("navigation", { name: "Tools" });
@@ -256,7 +311,7 @@ await check("mobile: bottom navigation and More sheet open every module", async 
 }, { context: VIEWPORTS["390"] });
 
 await check("tablet touch: a tap on the rail opens the module without hover", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await page.locator('[data-rail="balance"]').tap();
   await page.waitForURL(/\/balance$/);
@@ -265,14 +320,14 @@ await check("tablet touch: a tap on the rail opens the module without hover", as
 
 // ---------------------------------------------------------------- motion
 
-await check("reduced motion: ambient animation and transitions are effectively off", async (page) => {
-  await page.goto(BASE);
-  await settle(page, 600);
-  const spin = await page.evaluate(() => {
-    const el = document.querySelector(".rosette-spin");
-    return el ? getComputedStyle(el).animationName : "missing";
-  });
-  assert(spin === "none" || spin === "missing", `rosette still animates (${spin})`);
+await check("reduced motion: the ring and transitions are effectively still", async (page) => {
+  await page.goto(APP);
+  await settle(page, 900);
+  const spins = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-ring="stage"] g')].filter((g) => /spin/.test(g.getAttribute("class") ?? "")).map((g) => getComputedStyle(g).animationName),
+  );
+  assert(spins.length === 3, `expected 3 ring bands, found ${spins.length}`);
+  assert(spins.every((n) => n === "none"), `ring still turns (${spins.join(", ")})`);
   const dur = await page.evaluate(() => getComputedStyle(document.querySelector('[data-rail="earn"]')).transitionDuration);
   assert(dur.split(",").every((d) => parseFloat(d) < 0.01), `rail transition ${dur}`);
 }, { reducedMotion: true });
@@ -282,7 +337,7 @@ await check("reduced motion: ambient animation and transitions are effectively o
 await check("swap lifecycle: connect, review, one signature, confirmed, recorded in Activity", async (page) => {
   const execs = [];
   page.on("request", (r) => r.url().includes("/api/swap/execute") && execs.push(r.method()));
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await connect(page);
   await openReview(page);
@@ -302,10 +357,38 @@ await check("swap lifecycle: connect, review, one signature, confirmed, recorded
   await page.getByText(/Swap SOL for USDC/).first().waitFor({ timeout: 4000 });
 });
 
+await check("transaction ring: waits for the wallet, moves while sending, glows on confirmation, then settles", async (page) => {
+  await page.goto(APP);
+  await settle(page, 900);
+  await connect(page);
+  await openReview(page);
+  await page.evaluate(() => {
+    window.__ringLog = [];
+    const read = () => {
+      const tx = document.querySelector('[data-ring="tx"] svg')?.getAttribute("data-mode") ?? null;
+      const bg = document.querySelector('[data-ring="stage"] svg')?.getAttribute("data-mode") ?? null;
+      const last = window.__ringLog.at(-1);
+      if (!last || last.tx !== tx || last.bg !== bg) window.__ringLog.push({ tx, bg });
+    };
+    new MutationObserver(read).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-mode"] });
+    read();
+  });
+  await page.getByRole("button", { name: "Sign and swap" }).click();
+  await page.getByText("Confirmed").waitFor({ timeout: 12000 });
+  await page.waitForTimeout(3200);
+  const log = await page.evaluate(() => window.__ringLog);
+  const seq = (k) => log.map((e) => e[k]).filter((v, i, a) => v && v !== a[i - 1]);
+  // True when `want` appears in `list` in this order (other states may come between).
+  const order = (list, want) => want.reduce((at, w) => (at < 0 ? at : list.indexOf(w, at) < 0 ? -1 : list.indexOf(w, at) + 1), 0) > 0;
+  assert(order(seq("tx"), ["waiting", "moving", "landed"]), `dialog ring went ${seq("tx").join(" > ")}`);
+  assert(order(seq("bg"), ["waiting", "moving", "landed", "idle"]), `background ring went ${seq("bg").join(" > ")}`);
+  assert(log.at(-1).tx === "landed" && log.at(-1).bg === "idle", `ended at ${JSON.stringify(log.at(-1))}`);
+}, { walletOpts: { delayMs: 700 } });
+
 await check("duplicate protection: a double click signs and submits once", async (page) => {
   const execs = [];
   page.on("request", (r) => r.url().includes("/api/swap/execute") && execs.push(1));
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await connect(page);
   await openReview(page);
@@ -320,7 +403,7 @@ await check("duplicate protection: a double click signs and submits once", async
 await check("wallet rejection: nothing is submitted and the review can be retried", async (page) => {
   const execs = [];
   page.on("request", (r) => r.url().includes("/api/swap/execute") && execs.push(1));
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await connect(page);
   await openReview(page);
@@ -333,7 +416,7 @@ await check("wallet rejection: nothing is submitted and the review can be retrie
 
 if (SLOW) {
   await check("quote expiry: approval is blocked after the terms expire", async (page) => {
-    await page.goto(BASE);
+    await page.goto(APP);
     await settle(page);
     await connect(page);
     await openReview(page);
@@ -346,68 +429,10 @@ if (SLOW) {
   });
 }
 
-// ---------------------------------------------------------------- demo
-
-await check("demo mode: clearly marked, no wallet calls, demo receipt", async (page) => {
-  const upstream = [];
-  page.on("request", (r) => /\/api\/(swap|rpc|spr)\//.test(r.url()) && upstream.push(r.url()));
-  await page.goto(BASE);
-  await settle(page);
-  await page.getByText("Demo mode").first().waitFor();
-  await page.getByRole("button", { name: "Use the demo wallet" }).waitFor({ timeout: 4000 }).catch(() => {});
-  await typeAmount(page, "3");
-  await page.getByRole("button", { name: "Use the demo wallet" }).click();
-  const dialog = page.getByRole("dialog");
-  if (await dialog.isVisible().catch(() => false)) await dialog.getByRole("button", { name: "Use demo wallet" }).click();
-  await page.getByRole("button", { name: "Review swap" }).click({ timeout: 8000 });
-  const review = await page.locator("dialog[open]").innerText();
-  assert(/nothing will be signed or sent/i.test(review), "demo review lacks the demo notice");
-  await page.getByRole("button", { name: "Simulate swap" }).click();
-  await page.getByText("Simulated", { exact: true }).waitFor({ timeout: 10000 });
-  const calls = await page.evaluate(() => window.__qaSignCalls ?? 0);
-  assert(calls === 0, `demo mode asked the wallet to sign ${calls} times`);
-  assert(upstream.length === 0, `demo mode reached upstream routes: ${upstream.slice(0, 3).join(", ")}`);
-}, { settings: DEMO });
-
-await check("demo private-balance swap: three reviewed steps, consent first, balance back in private", async (page) => {
-  await page.goto(`${BASE}/balance`);
-  await settle(page);
-  await page.getByRole("button", { name: /Use demo wallet|Connect wallet/ }).first().click();
-  const dialog = page.getByRole("dialog");
-  if (await dialog.isVisible().catch(() => false)) await dialog.getByRole("button", { name: "Use demo wallet" }).click();
-  await page.getByRole("checkbox").first().check();
-  await page.getByRole("button", { name: /Unlock demo balance/ }).click();
-  await page.getByText(/Synced/).first().waitFor({ timeout: 6000 });
-  await page.locator('[data-rail="swap"]').click();
-  await page.waitForURL(BASE + "/");
-  await page.getByRole("button", { name: "Public wallet" }).click();
-  await page.getByRole("radio", { name: /Private balance/ }).click();
-  await typeAmount(page, "1");
-  await page.getByRole("button", { name: "Review private-balance swap" }).click({ timeout: 8000 });
-  const open = page.locator("dialog[open]");
-  await open.getByText(/step 1 of 3/).waitFor({ timeout: 6000 });
-  const simulateOut = open.getByRole("button", { name: /Simulate withdrawal|Confirm the privacy change/ });
-  assert((await simulateOut.isDisabled()), "step 1 can be signed without accepting the public flow");
-  await open.getByRole("checkbox").check();
-  await open.getByRole("button", { name: "Simulate withdrawal" }).click();
-  await open.getByRole("button", { name: /Continue: swap on Jupiter/ }).click({ timeout: 8000 });
-  await open.getByText(/step 2 of 3/).waitFor({ timeout: 6000 });
-  await open.getByRole("button", { name: "Simulate swap" }).click({ timeout: 8000 });
-  await open.getByRole("button", { name: /Continue: move USDC in/ }).click({ timeout: 8000 });
-  await open.getByText(/step 3 of 3/).waitFor({ timeout: 6000 });
-  await open.getByRole("button", { name: "Simulate deposit" }).click({ timeout: 8000 });
-  await open.getByText("Simulated", { exact: true }).waitFor({ timeout: 8000 });
-  await open.getByRole("button", { name: "Done" }).click();
-  await page.locator('[data-rail="balance"]').click();
-  await page.waitForURL(/\/balance$/);
-  const text = await page.locator("main").innerText();
-  assert(/USDC/.test(text) && /3 notes|4 notes|notes/.test(text), "private balance not shown after the flow");
-}, { settings: DEMO, wallet: false });
-
 // ---------------------------------------------------------------- privacy hygiene
 
 await check("storage hygiene: only settings persist; no address, amount or key material in storage, cookies or URL", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await connect(page);
   await openReview(page);
@@ -429,7 +454,7 @@ await check("storage hygiene: only settings persist; no address, amount or key m
 });
 
 await check("masking: balances are hidden in the card, panel and preview", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page);
   await connect(page);
   await settle(page, 400);
@@ -440,10 +465,10 @@ await check("masking: balances are hidden in the card, panel and preview", async
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await preview(page).waitFor({ timeout: 1500 });
   assert(!/\$\d/.test(await preview(page).innerText()), "dollar value visible in the Balance preview while masked");
-}, { settings: { ...DEMO, demoMode: false, maskBalances: true } });
+}, { settings: { maskBalances: true } });
 
 await check("headers: CSP and framing protections on the page and no-store on APIs", async (page) => {
-  const res = await page.goto(BASE);
+  const res = await page.goto(APP);
   const h = res.headers();
   assert(/frame-ancestors 'none'/.test(h["content-security-policy"] ?? ""), "CSP frame-ancestors missing");
   assert(/connect-src 'self'/.test(h["content-security-policy"] ?? ""), "CSP connect-src not locked to self");
@@ -453,6 +478,21 @@ await check("headers: CSP and framing protections on the page and no-store on AP
   assert(/no-store/.test(api.headers()["cache-control"] ?? ""), "API responses are cacheable");
   const cross = await page.request.post(`${BASE}/api/swap/order`, { headers: { origin: "https://evil.example", "content-type": "application/json" }, data: {} });
   assert(cross.status() === 403, `cross-origin POST returned ${cross.status()}`);
+});
+
+await check("mainnet only: relays refuse other networks and the settings offer no network switch", async (page) => {
+  const rpc = await page.request.post(`${BASE}/api/rpc/devnet`, { headers: { "content-type": "application/json" }, data: { jsonrpc: "2.0", id: 1, method: "getSlot" } });
+  assert(rpc.status() === 400, `devnet RPC returned ${rpc.status()}`);
+  const spr = await page.request.get(`${BASE}/api/spr/devnet/policy`);
+  assert(spr.status() === 400, `devnet Privacy Rings relay returned ${spr.status()}`);
+  const caps = await (await page.request.get(`${BASE}/api/capabilities`)).json();
+  assert(caps.network === "mainnet" && !("devnet" in caps.privacy), "capabilities still describe another network");
+  await page.goto(`${BASE}/settings`);
+  await page.getByRole("heading", { level: 1, name: "Settings and security" }).waitFor();
+  await page.getByText("Solana mainnet only").waitFor({ timeout: 5000 });
+  const text = await page.locator("main").innerText();
+  assert(!/devnet|demo mode/i.test(text), "settings still mention devnet or demo mode");
+  assert(/Solana mainnet only/.test(text), "settings do not state mainnet only");
 });
 
 await browser.close();

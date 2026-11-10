@@ -26,7 +26,7 @@ type Feed = { mint: string; feed: { feedId: string; symbol: string } };
  */
 async function onchainPrices(feeds: Feed[]): Promise<Record<string, unknown>> {
   const accounts = await Promise.all(feeds.map((f) => pushFeedAccount(f.feed.feedId)));
-  const res = await upstreamJson(rpcUrl("mainnet"), {
+  const res = await upstreamJson(rpcUrl(), {
     service: "solana-rpc",
     method: "POST",
     body: { jsonrpc: "2.0", id: 1, method: "getMultipleAccounts", params: [accounts, { encoding: "base64", commitment: "confirmed" }] },

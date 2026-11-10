@@ -18,10 +18,10 @@ import {
 } from "@solana/wallet-standard-features";
 import type { Network } from "@/lib/operations/intent";
 
-export type SolanaChain = "solana:mainnet" | "solana:devnet";
+export type SolanaChain = "solana:mainnet";
 
 export function chainFor(network: Network): SolanaChain {
-  return network === "mainnet" ? "solana:mainnet" : "solana:devnet";
+  return `solana:${network}`;
 }
 
 export interface WalletOption {

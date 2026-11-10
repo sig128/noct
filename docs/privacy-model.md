@@ -57,7 +57,7 @@ Your IP address reaches NOCT's server; upstream providers see the server's addre
 - Spending still needs the wallet's own transaction signature every time. The derived keys can read, not spend.
 - Anyone who obtains the derivation signature can read the private balance and history. NOCT warns users to sign that message only on NOCT.
 - Recovery: connect the same wallet on any device and unlock again; the balance is rebuilt from the chain through the indexer. Any client built on the Privacy Rings SDK can derive the same keys from the same wallet and withdraw. If the wallet's keys are lost, the private balance is lost with them.
-- Locking (manual, after inactivity, on network or demo-mode change, when the page is hidden with zero auto-lock, on page unload) destroys the session and clears decrypted state from memory.
+- Locking (manual, after inactivity, on a wallet or account change, when the page is hidden with zero auto-lock, on page unload) destroys the session and clears decrypted state from memory.
 
 ## Known privacy limitations
 

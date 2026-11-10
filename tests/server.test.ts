@@ -49,7 +49,7 @@ describe("token metadata mapping", () => {
 });
 
 describe("request guards", () => {
-  const req = (method: string, headers: Record<string, string>) => new NextRequest("http://localhost:3100/api/spr/devnet/prover/prove", { method, headers, body: method === "POST" ? "x" : undefined });
+  const req = (method: string, headers: Record<string, string>) => new NextRequest("http://localhost:3100/api/spr/mainnet/prover/prove", { method, headers, body: method === "POST" ? "x" : undefined });
 
   it("accepts the prover's encrypted octet-stream bodies only where allowed", async () => {
     const { sameOriginGuard } = await import("@/lib/server/guard");
@@ -83,5 +83,43 @@ describe("server configuration", () => {
     } finally {
       process.env = saved;
     }
+  });
+});
+
+describe("mainnet only", () => {
+  const sameOrigin = { origin: "http://localhost:3100", host: "localhost:3100", "sec-fetch-site": "same-origin", "content-type": "application/json" };
+
+  it("the RPC relay refuses any other network", async () => {
+    const { POST } = await import("@/app/api/rpc/[network]/route");
+    const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getSlot" });
+    const res = await POST(new NextRequest("http://localhost:3100/api/rpc/devnet", { method: "POST", headers: sameOrigin, body }), { params: Promise.resolve({ network: "devnet" }) });
+    expect(res.status).toBe(400);
+  });
+
+  it("the Privacy Rings relay refuses any other network", async () => {
+    const { GET } = await import("@/app/api/spr/[network]/[...path]/route");
+    const res = await GET(new NextRequest("http://localhost:3100/api/spr/devnet/policy", { headers: { "sec-fetch-site": "same-origin" } }), { params: Promise.resolve({ network: "devnet", path: ["policy"] }) });
+    expect(res.status).toBe(400);
+  });
+
+  it("uses Helius mainnet RPC when only a Helius key is set", async () => {
+    vi.resetModules();
+    const saved = { ...process.env };
+    try {
+      delete process.env.SOLANA_RPC_URL_MAINNET;
+      process.env.HELIUS_API_KEY = "test-key-123";
+      const { rpcUrl, rpcIsDefaultPublic } = await import("@/lib/server/env");
+      expect(rpcUrl()).toBe("https://mainnet.helius-rpc.com/?api-key=test-key-123");
+      expect(rpcIsDefaultPublic()).toBe(false);
+    } finally {
+      process.env = saved;
+    }
+  });
+
+  it("drops the old network and demo settings when loading stored preferences", async () => {
+    const { sanitizeStoredSettings } = await import("@/lib/client/stores");
+    expect(sanitizeStoredSettings({ demoMode: true, network: "devnet", maskBalances: true, lockAfterMinutes: 5, slippageBps: 50 })).toEqual({ maskBalances: true, lockAfterMinutes: 5, slippageBps: 50 });
+    expect(sanitizeStoredSettings({ lockAfterMinutes: -1, slippageBps: 9_999, maskBalances: "yes" })).toEqual({});
+    expect(sanitizeStoredSettings(null)).toEqual({});
   });
 });

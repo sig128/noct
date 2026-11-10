@@ -4,6 +4,64 @@
   min-height: 100dvh;
 }
 
+/* The landing page covers the viewport; nothing behind it scrolls. */
+.shell[data-stage="landing"] {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Everything except the landing page and the ring. Fades in when the app launches. */
+.app {
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.7s ease 0.3s;
+}
+
+.app[data-stage="landing"] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.3s ease,
+    visibility 0s linear 0.3s;
+}
+
+/* ------------------------------------------------------------ ring */
+
+.ringStage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ringBox {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 50% 50%;
+  transition: opacity 0.9s ease;
+}
+
+.ringBox[data-ready] {
+  transition:
+    transform 1.15s cubic-bezier(0.7, 0, 0.2, 1),
+    opacity 0.9s ease;
+}
+
+.ringBox[data-ready][data-snap] {
+  transition: opacity 0.9s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ringBox[data-ready] {
+    transition: opacity 0.4s ease;
+  }
+  .app {
+    transition: opacity 0.2s ease;
+  }
+}
+
 /* ------------------------------------------------------------ top bar */
 
 .topbar {
@@ -88,21 +146,6 @@
   background: var(--error);
 }
 
-.demoPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 8px;
-  background: var(--warn-soft);
-  border: 1px solid var(--warn-line);
-  color: var(--warn);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
 .lockPill {
   display: inline-flex;
   align-items: center;
@@ -122,17 +165,12 @@
   background: rgba(182, 175, 232, 0.16);
 }
 
-.demoPill,
 .netPill,
 .walletBtn {
   white-space: nowrap;
 }
 
 @media (max-width: 520px) {
-  /* The striped edge and per-card tags carry the demo marking at this width. */
-  .demoPill {
-    display: none;
-  }
   .topRight {
     gap: 6px;
   }
@@ -157,16 +195,6 @@
   min-height: 40px;
   padding: 0 14px;
   font-size: var(--fs-small);
-}
-
-.demoEdge {
-  position: fixed;
-  inset: 0 0 auto 0;
-  height: 2px;
-  background: repeating-linear-gradient(90deg, var(--warn) 0 14px, transparent 14px 22px);
-  opacity: 0.7;
-  z-index: 40;
-  pointer-events: none;
 }
 
 /* ------------------------------------------------------------ workspace */
@@ -533,7 +561,7 @@
   align-items: flex-start;
 }
 
-/* Viewport-level layer so the seal can sit low and right without causing scroll. */
+/* Where the ring sits beside the swap. Empty: RingStage measures it and draws the ring there. */
 .ambientLayer {
   position: fixed;
   inset: 0;
@@ -548,21 +576,6 @@
   bottom: 8px;
   width: clamp(540px, 74vmin, 820px);
   aspect-ratio: 1;
-  opacity: 0;
-  animation: ambientIn 1.2s var(--ease) 0.2s forwards;
-}
-
-@keyframes ambientIn {
-  to {
-    opacity: var(--ambient-max, 1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ambientArt {
-    animation: none;
-    opacity: var(--ambient-max, 1);
-  }
 }
 
 @media (max-width: 1179px) {
@@ -578,13 +591,3 @@
   }
 }
 
-.ambientCaption {
-  position: absolute;
-  left: 50%;
-  bottom: 4%;
-  transform: translateX(-50%);
-  max-width: 34ch;
-  text-align: center;
-  color: var(--text-3);
-  font-size: var(--fs-small);
-}

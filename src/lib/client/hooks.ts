@@ -2,19 +2,10 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { NETWORK } from "@/lib/operations/intent";
 import { api } from "./api";
 import { solanaRpc } from "./rpc";
-import { useSettings, useWallet, useSettingsReady } from "./stores";
-import {
-  DEMO_BORROW_POSITIONS,
-  DEMO_DEFAULT_MINTS,
-  DEMO_EARN_MARKETS,
-  DEMO_EARN_POSITIONS,
-  DEMO_PUBLIC_BALANCES,
-  DEMO_TOKENS,
-  demoSearch,
-  demoVaults,
-} from "@/lib/adapters/demo";
+import { useWallet, useSettingsReady } from "./stores";
 import { parseMintAccount, type MintFacts } from "@/lib/tokens/mint-account";
 import { NATIVE_SOL_MINT, USDC_MINT, type TokenInfo } from "@/lib/tokens/types";
 
@@ -64,9 +55,8 @@ export function useNow(): number {
 
 export function useCapabilities() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   return useQuery({
-    queryKey: ["capabilities", demo],
+    queryKey: ["capabilities"],
     enabled: ready,
     queryFn: ({ signal }) => api.capabilities(signal),
     staleTime: 60_000,
@@ -76,11 +66,10 @@ export function useCapabilities() {
 
 export function useDefaultTokens() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   return useQuery({
-    queryKey: ["tokens:defaults", demo],
+    queryKey: ["tokens:defaults"],
     enabled: ready,
-    queryFn: async ({ signal }): Promise<TokenInfo[]> => (demo ? DEMO_TOKENS.filter((t) => DEMO_DEFAULT_MINTS.includes(t.mint)) : (await api.tokensByMint(DEFAULT_MINTS, signal)).tokens),
+    queryFn: async ({ signal }): Promise<TokenInfo[]> => (await api.tokensByMint(DEFAULT_MINTS, signal)).tokens,
     staleTime: 5 * 60_000,
     retry: 1,
   });
@@ -92,11 +81,10 @@ export function useDefaultTokens() {
  */
 export function useTokenSearch(query: string) {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   const q = useDebounced(query.trim(), 220);
   const result = useQuery({
-    queryKey: ["tokens:search", demo, q],
-    queryFn: async ({ signal }) => (demo ? demoSearch(q) : (await api.searchTokens(q, signal)).tokens),
+    queryKey: ["tokens:search", q],
+    queryFn: async ({ signal }) => (await api.searchTokens(q, signal)).tokens,
     enabled: ready && q.length > 0,
     staleTime: 30_000,
     retry: 0,
@@ -106,11 +94,10 @@ export function useTokenSearch(query: string) {
 
 export function useTokensByMint(mints: readonly string[]) {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   const key = [...new Set(mints)].sort();
   return useQuery({
-    queryKey: ["tokens:mints", demo, key.join(",")],
-    queryFn: async ({ signal }) => (demo ? DEMO_TOKENS.filter((t) => key.includes(t.mint)) : (await api.tokensByMint(key.slice(0, 50), signal)).tokens),
+    queryKey: ["tokens:mints", key.join(",")],
+    queryFn: async ({ signal }) => (await api.tokensByMint(key.slice(0, 50), signal)).tokens,
     enabled: ready && key.length > 0,
     staleTime: 5 * 60_000,
   });
@@ -118,16 +105,10 @@ export function useTokensByMint(mints: readonly string[]) {
 
 export function usePrices(mints: readonly (string | null | undefined)[]) {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   const key = [...new Set(mints.filter((m): m is string => Boolean(m)))].sort();
   return useQuery({
-    queryKey: ["prices", demo, key.join(",")],
-    queryFn: async ({ signal }) => {
-      if (demo) {
-        return Object.fromEntries(DEMO_TOKENS.filter((t) => key.includes(t.mint) && t.usdPrice).map((t) => [t.mint, { usdPrice: t.usdPrice!, blockId: null }]));
-      }
-      return (await api.prices(key, signal)).prices;
-    },
+    queryKey: ["prices", key.join(",")],
+    queryFn: async ({ signal }) => (await api.prices(key, signal)).prices,
     enabled: ready && key.length > 0,
     staleTime: 10_000,
     refetchInterval: 20_000,
@@ -142,31 +123,14 @@ export interface PublicBalances {
 
 export function usePublicBalances() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address);
   return useQuery({
-    queryKey: ["balances", demo, network, address],
+    queryKey: ["balances", address],
     queryFn: async ({ signal }): Promise<PublicBalances> => {
-      if (demo) {
-        const sol = DEMO_PUBLIC_BALANCES.find((b) => b.mint === NATIVE_SOL_MINT)!.amount;
-        return {
-          lamports: sol,
-          tokens: DEMO_PUBLIC_BALANCES.filter((b) => b.mint !== NATIVE_SOL_MINT).map((b) => ({
-            mint: b.mint,
-            amount: b.amount,
-            decimals: DEMO_TOKENS.find((t) => t.mint === b.mint)?.decimals ?? 6,
-            program: "spl" as const,
-            account: `demo-${b.mint.slice(0, 6)}`,
-            frozen: false,
-          })),
-          fetchedAt: Date.now(),
-        };
-      }
-      const [lamports, tokens] = await Promise.all([solanaRpc.getLamports(network, address!, signal), solanaRpc.getTokenHoldings(network, address!, signal)]);
+      const [lamports, tokens] = await Promise.all([solanaRpc.getLamports(NETWORK, address!, signal), solanaRpc.getTokenHoldings(NETWORK, address!, signal)]);
       return { lamports, tokens, fetchedAt: Date.now() };
     },
-    enabled: ready && (demo || Boolean(address)),
+    enabled: ready && Boolean(address),
     staleTime: 10_000,
     refetchInterval: 25_000,
   });
@@ -181,32 +145,11 @@ export function publicBalanceOf(b: PublicBalances | undefined, mint: string): bi
 
 export function useMintFacts(mint: string | null | undefined) {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   return useQuery({
-    queryKey: ["mint", demo, network, mint],
+    queryKey: ["mint", mint],
     queryFn: async ({ signal }): Promise<MintFacts | null> => {
-      if (demo) {
-        const t = DEMO_TOKENS.find((x) => x.mint === mint);
-        if (!t) return null;
-        const token2022 = t.tokenProgram === "token2022";
-        return {
-          program: token2022 ? "token2022" : "spl",
-          decimals: t.decimals,
-          supply: 0n,
-          mintAuthority: t.mintAuthority,
-          freezeAuthority: t.freezeAuthority,
-          extensions: token2022 ? [{ type: 1, name: "TransferFeeConfig" }] : [],
-          transferFee: token2022 ? { older: { epoch: 0n, maximumFee: 10n ** 18n, basisPoints: 100 }, newer: { epoch: 0n, maximumFee: 10n ** 18n, basisPoints: 100 } } : null,
-          transferHookProgram: null,
-          permanentDelegate: null,
-          defaultAccountStateFrozen: false,
-          pausable: false,
-          nonTransferable: false,
-        };
-      }
       if (!mint || mint === NATIVE_SOL_MINT) return null;
-      const account = await solanaRpc.getAccountBytes(network, mint, signal);
+      const account = await solanaRpc.getAccountBytes(NETWORK, mint, signal);
       if (!account) return null;
       return parseMintAccount(account.data, account.owner);
     },
@@ -218,24 +161,20 @@ export function useMintFacts(mint: string | null | undefined) {
 
 export function useEpoch() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   return useQuery({
-    queryKey: ["epoch", demo, network],
+    queryKey: ["epoch"],
     enabled: ready,
-    queryFn: async () => (demo ? 800n : solanaRpc.getEpoch(network)),
+    queryFn: () => solanaRpc.getEpoch(NETWORK),
     staleTime: 10 * 60_000,
   });
 }
 
 export function useEarnMarkets() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   return useQuery({
-    queryKey: ["earn:markets", demo],
-    queryFn: async ({ signal }) => (demo ? { markets: DEMO_EARN_MARKETS, fetchedAt: Date.now() } : api.earnMarkets(signal)),
-    enabled: ready && (demo || network === "mainnet"),
+    queryKey: ["earn:markets"],
+    queryFn: ({ signal }) => api.earnMarkets(signal),
+    enabled: ready,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -243,13 +182,10 @@ export function useEarnMarkets() {
 
 export function useEarnPositions() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   const address = useWallet((s) => s.address);
-  const network = useSettings((s) => s.network);
   return useQuery({
-    queryKey: ["earn:positions", demo, address],
+    queryKey: ["earn:positions", address],
     queryFn: async ({ signal }) => {
-      if (demo) return DEMO_EARN_POSITIONS;
       const { positions } = await api.earnPositions(address!, signal);
       return positions
         .map((p) => {
@@ -259,7 +195,7 @@ export function useEarnPositions() {
         })
         .filter((p) => p.receiptMint && p.shares > 0n);
     },
-    enabled: ready && (demo || (Boolean(address) && network === "mainnet")),
+    enabled: ready && Boolean(address),
     staleTime: 15_000,
     refetchInterval: 45_000,
   });
@@ -267,12 +203,10 @@ export function useEarnPositions() {
 
 export function useVaults() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   return useQuery({
-    queryKey: ["borrow:vaults", demo],
-    queryFn: async ({ signal }) => (demo ? { vaults: demoVaults(Date.now()), fetchedAt: Date.now() } : api.vaults(signal)),
-    enabled: ready && (demo || network === "mainnet"),
+    queryKey: ["borrow:vaults"],
+    queryFn: ({ signal }) => api.vaults(signal),
+    enabled: ready,
     staleTime: 20_000,
     refetchInterval: 45_000,
   });
@@ -280,13 +214,11 @@ export function useVaults() {
 
 export function useBorrowPositions() {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   const address = useWallet((s) => s.address);
-  const network = useSettings((s) => s.network);
   return useQuery({
-    queryKey: ["borrow:positions", demo, address],
-    queryFn: async ({ signal }) => (demo ? DEMO_BORROW_POSITIONS : (await api.borrowPositions(address!, signal)).positions),
-    enabled: ready && (demo || (Boolean(address) && network === "mainnet")),
+    queryKey: ["borrow:positions", address],
+    queryFn: async ({ signal }) => (await api.borrowPositions(address!, signal)).positions,
+    enabled: ready && Boolean(address),
     staleTime: 15_000,
     refetchInterval: 45_000,
   });
@@ -294,12 +226,11 @@ export function useBorrowPositions() {
 
 export function useOraclePrices(mints: readonly string[]) {
   const ready = useSettingsReady();
-  const demo = useSettings((s) => s.demoMode);
   const key = [...new Set(mints)].sort();
   return useQuery({
-    queryKey: ["oracle", demo, key.join(",")],
-    queryFn: async ({ signal }) => (demo ? null : api.oracle(key, signal)),
-    enabled: ready && key.length > 0 && !demo,
+    queryKey: ["oracle", key.join(",")],
+    queryFn: ({ signal }) => api.oracle(key, signal),
+    enabled: ready && key.length > 0,
     staleTime: 5_000,
     refetchInterval: 15_000,
     retry: 0,

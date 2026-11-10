@@ -21,7 +21,7 @@ export function ModulePanel({ id, title, lead, children, badge }: { id: ModuleId
   }, [id]);
 
   const close = () => {
-    router.push("/");
+    router.push("/swap");
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-rail="${id}"]`)?.focus());
   };
 

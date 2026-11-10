@@ -1,15 +1,14 @@
 "use client";
 
-import { DEMO_PRIVATE_BALANCES, DEMO_WALLET } from "@/lib/adapters/demo";
-import { USDC_MINT } from "@/lib/tokens/types";
+import { NETWORK } from "@/lib/operations/intent";
 import { api } from "./api";
-import { getPrivacySession, journal, reservations, setPrivacySession, useActivity, usePrivate, useSettings, useWallet } from "./stores";
+import { getPrivacySession, journal, reservations, setPrivacySession, useActivity, usePrivate, useWallet } from "./stores";
 import { connectWallet, disconnectWallet, onAccountsChanged, signExactMessage, type WalletOption } from "@/lib/wallet/standard";
 import { useTxFlow, txFlow } from "./tx-flow";
 
 let offAccountListener: (() => void) | null = null;
 
-/** Clears protected views and anything tied to the previous wallet, account or network. */
+/** Clears protected views and anything tied to the previous wallet or account. */
 export function invalidateSession(reason: string): void {
   useWallet.getState().bump();
   usePrivate.getState().lock(reason);
@@ -20,11 +19,10 @@ export function invalidateSession(reason: string): void {
 }
 
 export async function connect(option: WalletOption): Promise<void> {
-  const { network } = useSettings.getState();
   const w = useWallet.getState();
   w.set({ status: "connecting", error: null });
   try {
-    const account = await connectWallet(option, network);
+    const account = await connectWallet(option, NETWORK);
     offAccountListener?.();
     offAccountListener = onAccountsChanged(option, (accounts) => {
       const current = useWallet.getState();
@@ -61,16 +59,13 @@ export interface UnlockCheck {
 
 /** Why the private balance cannot be unlocked right now, if anything. */
 export async function checkUnlock(): Promise<UnlockCheck> {
-  const { demoMode, network } = useSettings.getState();
-  if (demoMode) return { ok: true, reason: null };
   const w = useWallet.getState();
   if (!w.option || !w.account) return { ok: false, reason: "Connect a wallet first." };
   if (!w.option.canSignMessage) return { ok: false, reason: `${w.option.name} cannot sign messages, which deriving a private balance needs.` };
   if (!w.option.signsV1) return { ok: false, reason: `${w.option.name} does not report support for version-1 transactions, which Privacy Rings uses.` };
   try {
     const caps = await api.capabilities();
-    const net = caps.privacy[network];
-    if (!net.enabled) return { ok: false, reason: net.reason ?? "Private balances are not available on this network." };
+    if (!caps.privacy.enabled) return { ok: false, reason: caps.privacy.reason ?? "Private balances are not available on this deployment." };
   } catch {
     return { ok: false, reason: "NOCT's server could not report its configuration." };
   }
@@ -78,25 +73,7 @@ export async function checkUnlock(): Promise<UnlockCheck> {
 }
 
 export async function unlockPrivate(): Promise<void> {
-  const { demoMode, network } = useSettings.getState();
   const store = usePrivate.getState();
-  if (demoMode) {
-    store.set({
-      status: "ready",
-      demo: true,
-      owner: DEMO_WALLET,
-      network,
-      balances: DEMO_PRIVATE_BALANCES.map((b) => ({ ...b })),
-      history: [
-        { id: "demo-h1", kind: "privateTransfer", direction: "inbound", asset: USDC_MINT, amount: 240_000_000n },
-        { id: "demo-h2", kind: "deposit", direction: "inbound", asset: USDC_MINT, amount: 400_000_000n },
-      ],
-      registered: true,
-      lastSyncedAt: Date.now(),
-      error: null,
-    });
-    return;
-  }
   const check = await checkUnlock();
   if (!check.ok) {
     store.set({ status: "error", error: check.reason });
@@ -108,7 +85,7 @@ export async function unlockPrivate(): Promise<void> {
   try {
     const { openPrivacySession } = await import("@/lib/adapters/privacy/spr");
     const session = await openPrivacySession({
-      network,
+      network: NETWORK,
       origin: window.location.origin,
       owner: w.address!,
       ownerPublicKey: new Uint8Array(w.account!.publicKey),
@@ -119,7 +96,7 @@ export async function unlockPrivate(): Promise<void> {
       return;
     }
     setPrivacySession(session);
-    usePrivate.getState().set({ status: "syncing", owner: w.address, network, demo: false });
+    usePrivate.getState().set({ status: "syncing", owner: w.address, network: NETWORK });
     await session.sync();
     const registration = await session.buildRegistration();
     if (useWallet.getState().epoch !== epoch || getPrivacySession() !== session) return;
@@ -133,10 +110,6 @@ export async function unlockPrivate(): Promise<void> {
 export async function resyncPrivate(): Promise<void> {
   const session = getPrivacySession();
   const store = usePrivate.getState();
-  if (store.demo) {
-    store.set({ lastSyncedAt: Date.now() });
-    return;
-  }
   if (!session) return;
   store.set({ status: "syncing" });
   try {

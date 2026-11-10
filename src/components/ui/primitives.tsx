@@ -202,15 +202,14 @@ export function EmptyState({ title, children, action }: { title: string; childre
   );
 }
 
-export function ExplorerLinks({ signature, network }: { signature: string; network: "mainnet" | "devnet" }) {
-  if (signature.startsWith("demo-")) return <span className="chip chip-warn">Demo: no transaction exists</span>;
-  const cluster = network === "devnet" ? "?cluster=devnet" : "";
+/** Mainnet explorer links for a transaction signature. */
+export function ExplorerLinks({ signature }: { signature: string }) {
   return (
     <span className={styles.links}>
-      <a className="link" href={`https://solscan.io/tx/${signature}${cluster}`} target="_blank" rel="noopener noreferrer">
+      <a className="link" href={`https://solscan.io/tx/${signature}`} target="_blank" rel="noopener noreferrer">
         Solscan <Icon name="external" size={13} />
       </a>
-      <a className="link" href={`https://explorer.solana.com/tx/${signature}${cluster}`} target="_blank" rel="noopener noreferrer">
+      <a className="link" href={`https://explorer.solana.com/tx/${signature}`} target="_blank" rel="noopener noreferrer">
         Solana Explorer <Icon name="external" size={13} />
       </a>
     </span>

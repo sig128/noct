@@ -1,6 +1,6 @@
 # NOCT
 
-A swap-first Solana finance workspace. The home screen is a working swap; balances, private transfers, lending, borrowing, activity and security settings open from a rail on the right edge (a bottom bar on phones).
+A swap-first Solana finance workspace, on Solana mainnet only. The landing page at `/` shows NOCT's ring and a "Launch app" button; launching glides the ring to its place beside the swap at `/swap`. Balances, private transfers, lending, borrowing, activity and security settings open from a rail on the right edge (a bottom bar on phones). The ring also shows the operation in flight: it speeds up while a transaction is on its way and glows when it lands.
 
 NOCT states, per operation, exactly what becomes public. A public Jupiter swap is labelled public. A private transfer through Solana Privacy Rings hides the token and amount but not the addresses, and says so. Features that do not exist in an audited, deployable form (private swaps, anonymous transfers, private lending, native confidential credit) are shown as unavailable with the reason, never simulated as real.
 
@@ -17,8 +17,8 @@ NOCT states, per operation, exactly what becomes public. A public Jupiter swap i
 | Earn | Supply to and withdraw from Jupiter Lend markets (public positions) | Jupiter Lend Earn API (beta) |
 | Borrow | Explicit collateral/debt vault pairs, health and liquidation price, oracle freshness gate | Jupiter Lend Borrow API (beta) |
 | Activity | This session's operations and, when unlocked, private history | In-memory journal, Privacy Rings indexer |
-| Settings and security | Masking, demo mode, network, auto-lock, recovery, permissions, provider and program-authority report | Local settings, on-chain program accounts |
-| Demo mode | Made-up data for presentations; clearly marked; cannot sign or send | Local fixtures in the client |
+| Settings and security | Masking, auto-lock, recovery, permissions, provider and program-authority report | Local settings, on-chain program accounts |
+| Landing page | The ring, a one-line description and "Launch app"; the app opens at `/swap` | Client only |
 
 ## Requirements
 
@@ -31,7 +31,7 @@ NOCT states, per operation, exactly what becomes public. A public Jupiter swap i
 ```sh
 npm ci
 cp .env.example .env.local   # optional: every variable has a safe default or degrades with a message
-npm run dev                  # http://localhost:3000
+npm run dev                  # http://localhost:3000 (landing), /swap (app)
 ```
 
 Production build:
@@ -51,10 +51,10 @@ Names only; see [.env.example](.env.example) for descriptions. Secrets stay on t
 | --- | --- | --- |
 | `JUPITER_API_BASE` | Jupiter API host | `https://api.jup.ag` |
 | `JUPITER_API_KEY` | Jupiter API key (higher limits) | unset: keyless |
-| `SOLANA_RPC_URL_MAINNET`, `SOLANA_RPC_URL_DEVNET` | Dedicated RPC endpoints | Helius (if key set) or public RPC |
+| `SOLANA_RPC_URL_MAINNET` | Dedicated mainnet RPC endpoint | Helius (if key set) or the public RPC |
 | `HELIUS_API_KEY` | Privacy Rings indexer and prover access; Helius RPC | unset: private balances off |
-| `SPR_INDEXER_URL_DEVNET`, `SPR_PROVER_URL_DEVNET`, `SPR_INDEXER_URL_MAINNET`, `SPR_PROVER_URL_MAINNET`, `SPR_POLICY_BASE` | Privacy Rings service endpoints | values published in the SDK README |
-| `SPR_MAINNET_ENABLED` | Allow mainnet private balances | `false` |
+| `SPR_INDEXER_URL_MAINNET`, `SPR_PROVER_URL_MAINNET`, `SPR_POLICY_BASE` | Privacy Rings service endpoints | values published in the SDK README |
+| `SPR_MAINNET_ENABLED` | Operator switch for private balances | `false` (off) |
 | `PYTH_API_KEY`, `PYTH_HERMES_BASE` | Optional: Pyth prices from Hermes instead of on-chain feeds | unset: on-chain feeds via the RPC |
 | `NOCT_ALLOWED_ORIGINS` | Extra origins allowed to call write endpoints | same origin only |
 | `NOCT_ICON_HOSTS` | Extra hosts the token-icon proxy may fetch | built-in allowlist |
@@ -79,7 +79,6 @@ npm run build
 npm run fixtures                      # terminal 1: fixture upstream on 127.0.0.1:4010
 JUPITER_API_BASE=http://127.0.0.1:4010 \
 SOLANA_RPC_URL_MAINNET=http://127.0.0.1:4010/rpc \
-SOLANA_RPC_URL_DEVNET=http://127.0.0.1:4010/rpc \
 NOCT_SILENT_LOGS=1 npx next start -p 3100 -H 127.0.0.1   # terminal 2
 npm run qa:visual                     # screenshots at 1440, 1280, 768 and 390 px into qa-output/
 npm run qa:interaction                # keyboard, pointer, touch, routing, lifecycle and hygiene checks
@@ -91,8 +90,8 @@ The QA scripts drive Chrome through `playwright-core`; set `QA_CHROME` to your C
 ## Project layout
 
 ```
-src/app/                 routes: / (swap), /[module], /api/* server relays
-src/components/          shell (rail, previews, panels), swap, tx review, panels, ui primitives
+src/app/                 routes: / (landing), /[module] (/swap and the tools), /api/* server relays
+src/components/          shell (landing, ring stage, rail, previews, panels), ring, swap, tx review, panels, ui primitives
 src/lib/decimal.ts       integer and fixed-point amount math
 src/lib/tokens/          sanitising, identity and impostor checks, risk, mint-account parsing
 src/lib/swap/            Jupiter schemas, quote normalisation, intent checks
@@ -100,7 +99,7 @@ src/lib/tx/              transaction decoding and program allowlists
 src/lib/operations/      intents, state machine, journal, reconciliation, escrow reference model
 src/lib/privacy/         disclosure profiles and downgrade rules
 src/lib/credit/          Jupiter Lend vault math, native credit reference model
-src/lib/adapters/        Privacy Rings adapter, demo data
+src/lib/adapters/        Privacy Rings adapter
 src/lib/server/          env, guards, rate limits, logging, upstream clients
 scripts/                 fixture upstream and browser QA (test infrastructure)
 tests/                   Vitest suites

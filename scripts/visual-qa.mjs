@@ -1,27 +1,26 @@
 #!/usr/bin/env node
 /**
- * Renders the key screens at 1440, 1280, 768 and 390 px and saves screenshots
+ * Renders the landing page and the key app screens at 1440, 1280, 768 and
+ * 390 px (and the ring's transaction states) and saves screenshots
  * to qa-output/. Run against a server backed by scripts/fixture-upstream.mjs.
  *   QA_BASE=http://127.0.0.1:3100 node scripts/visual-qa.mjs [filter]
  */
 import { mkdir } from "node:fs/promises";
-import { BASE, VIEWPORTS, launch, settle, settingsInitScript, testWallet, walletInitScript } from "./qa-lib.mjs";
+import { APP, BASE, VIEWPORTS, launch, settle, settingsInitScript, testWallet, walletInitScript } from "./qa-lib.mjs";
 
 const OUT = process.env.QA_OUT ?? "qa-output";
 const filter = process.argv[2] ?? "";
 await mkdir(OUT, { recursive: true });
 const browser = await launch();
 const wallet = await testWallet();
-const DEMO = { demoMode: true, network: "mainnet", maskBalances: false, lockAfterMinutes: 10, slippageBps: null };
 const results = [];
 
 async function shot(name, vpKey, fn, opts = {}) {
   const tag = `${name}-${vpKey}`;
   if (filter && !tag.includes(filter)) return;
   const ctx = await browser.newContext({ ...VIEWPORTS[vpKey], reducedMotion: opts.reducedMotion ? "reduce" : "no-preference" });
-  if (opts.demo) await ctx.addInitScript(settingsInitScript({ ...DEMO, ...(opts.settings ?? {}) }));
-  else if (opts.settings) await ctx.addInitScript(settingsInitScript({ ...DEMO, demoMode: false, ...opts.settings }));
-  if (opts.wallet !== false) await ctx.addInitScript(walletInitScript(wallet));
+  if (opts.settings) await ctx.addInitScript(settingsInitScript(opts.settings));
+  if (opts.wallet !== false) await ctx.addInitScript(walletInitScript({ ...wallet, ...(opts.walletOpts ?? {}) }));
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -54,12 +53,16 @@ const connect = async (page) => {
 };
 
 for (const vp of Object.keys(VIEWPORTS)) {
-  await shot("home", vp, async (page) => {
+  await shot("landing", vp, async (page) => {
     await page.goto(BASE);
+    await settle(page, 1800);
+  });
+  await shot("home", vp, async (page) => {
+    await page.goto(APP);
     await settle(page, 900);
   });
   await shot("quote", vp, async (page) => {
-    await page.goto(BASE);
+    await page.goto(APP);
     await settle(page, 600);
     await typeAmount(page, "1.25");
     await settle(page, 600);
@@ -67,7 +70,7 @@ for (const vp of Object.keys(VIEWPORTS)) {
 }
 
 await shot("quote-details", "1440", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 600);
   await typeAmount(page, "1.25");
   await page.getByRole("button", { name: /Costs and route/ }).click();
@@ -75,7 +78,7 @@ await shot("quote-details", "1440", async (page) => {
 });
 
 await shot("picker-bonk", "1440", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 600);
   await page.getByRole("button", { name: /You receive: USDC/ }).click();
   await page.locator("input[type=search]").fill("bonk");
@@ -83,7 +86,7 @@ await shot("picker-bonk", "1440", async (page) => {
 });
 
 await shot("picker-bonk", "390", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 600);
   await page.getByRole("button", { name: /You receive: USDC/ }).click();
   await page.locator("input[type=search]").fill("bonk");
@@ -91,7 +94,7 @@ await shot("picker-bonk", "390", async (page) => {
 });
 
 await shot("connected-quote", "1440", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 600);
   await connect(page);
   await typeAmount(page, "1.25");
@@ -99,7 +102,7 @@ await shot("connected-quote", "1440", async (page) => {
 });
 
 await shot("review", "1440", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 600);
   await connect(page);
   await typeAmount(page, "1.25");
@@ -109,7 +112,7 @@ await shot("review", "1440", async (page) => {
 });
 
 await shot("receipt", "1440", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 600);
   await connect(page);
   await typeAmount(page, "1.25");
@@ -120,14 +123,14 @@ await shot("receipt", "1440", async (page) => {
 });
 
 await shot("preview-earn", "1440", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 700);
   await page.locator('[data-rail="earn"]').hover();
   await settle(page, 700);
 });
 
 await shot("preview-balance", "1280", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 700);
   await page.locator('[data-rail="balance"]').hover();
   await settle(page, 500);
@@ -157,38 +160,38 @@ await shot("module-balance-768", "768", async (page) => {
   await settle(page, 600);
 });
 
-// Demo mode
-for (const vp of ["1440", "390"]) {
-  await shot("demo-home", vp, async (page) => {
-    await page.goto(BASE);
-    await settle(page, 800);
-    await page.locator("input[data-amount-input]").first().fill("3");
-    await settle(page, 900);
-  }, { demo: true });
-  await shot("demo-balance", vp, async (page) => {
-    await page.goto(`${BASE}/balance`);
-    await settle(page, 600);
-    await page.getByRole("button", { name: /Use demo wallet|Connect wallet/ }).first().click();
-    const dialog = page.getByRole("dialog");
-    if (await dialog.isVisible().catch(() => false)) await dialog.getByRole("button", { name: "Use demo wallet" }).click();
-    await settle(page, 400);
-    await page.getByRole("checkbox").first().check();
-    await page.getByRole("button", { name: /Unlock demo balance/ }).click();
-    await settle(page, 700);
-  }, { demo: true, wallet: false, fullPage: vp === "390" });
-}
+// The ring while a swap is on its way, and as it lands.
+await shot("ring-sending", "1440", async (page) => {
+  await page.goto(APP);
+  await settle(page, 900);
+  await connect(page);
+  await typeAmount(page, "1.25");
+  await page.getByRole("button", { name: "Review swap" }).click();
+  await page.getByRole("button", { name: "Sign and swap" }).click({ timeout: 8000 });
+  await page.waitForTimeout(500);
+}, { walletOpts: { delayMs: 1500 } });
 
-await shot("demo-dossier-moth", "1440", async (page) => {
-  await page.goto(BASE);
-  await settle(page, 700);
-  await page.getByRole("button", { name: /You receive: USDC/ }).click();
-  await page.locator("input[type=search]").fill("moth");
-  await settle(page, 600);
-  await page.getByRole("option").first().click();
-  await settle(page, 300);
-  await page.locator("input[data-amount-input]").first().fill("2");
-  await settle(page, 1200);
-}, { demo: true });
+await shot("ring-landed", "1440", async (page) => {
+  await page.goto(APP);
+  await settle(page, 900);
+  await connect(page);
+  await typeAmount(page, "1.25");
+  await page.getByRole("button", { name: "Review swap" }).click();
+  await page.getByRole("button", { name: "Sign and swap" }).click({ timeout: 8000 });
+  await page.getByText("Confirmed").waitFor({ timeout: 10000 });
+  await page.waitForTimeout(450);
+});
+
+await shot("ring-landed", "390", async (page) => {
+  await page.goto(APP);
+  await settle(page, 900);
+  await connect(page);
+  await typeAmount(page, "1.25");
+  await page.getByRole("button", { name: "Review swap" }).click();
+  await page.getByRole("button", { name: "Sign and swap" }).click({ timeout: 8000 });
+  await page.getByText("Confirmed").waitFor({ timeout: 10000 });
+  await page.waitForTimeout(450);
+});
 
 await shot("masked", "1440", async (page) => {
   await page.goto(`${BASE}/balance`);
@@ -198,7 +201,7 @@ await shot("masked", "1440", async (page) => {
 }, { settings: { maskBalances: true } });
 
 await shot("reduced-motion", "1440", async (page) => {
-  await page.goto(BASE);
+  await page.goto(APP);
   await settle(page, 900);
 }, { reducedMotion: true });
 

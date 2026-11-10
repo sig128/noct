@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { formatAmount, formatBps, formatRatioSignificant, parseUnits, ratioDiv, type Ratio } from "@/lib/decimal";
 import { useBorrowPositions, useOraclePrices, usePublicBalances, useVaults, publicBalanceOf } from "@/lib/client/hooks";
-import { useSettings, useWallet } from "@/lib/client/stores";
+import { NETWORK } from "@/lib/operations/intent";
+import { useWallet } from "@/lib/client/stores";
 import { borrowSpec, healthText, permilleText, symbolOf, toVaultParams, wrapSpec } from "@/lib/client/lend";
 import { txFlow } from "@/lib/client/tx-flow";
 import { checkOperate, checkVaultOracle, computeMetrics, formatAge, oraclePriceWhole, type VaultParams } from "@/lib/credit/vault-math";
@@ -23,9 +24,8 @@ const MAX_ORACLE_AGE_MS = 15 * 60_000;
 
 export function BorrowPanel() {
   const [tab, setTab] = useState<"external" | "native">("external");
-  const demo = useSettings((s) => s.demoMode);
   return (
-    <ModulePanel id="borrow" title="Borrow" lead="Every market is a fixed collateral and debt pair with its own limits. Tradable tokens are not automatically collateral." badge={demo ? <span className="chip chip-warn">Demo markets</span> : null}>
+    <ModulePanel id="borrow" title="Borrow" lead="Every market is a fixed collateral and debt pair with its own limits. Tradable tokens are not automatically collateral.">
       <div style={{ marginBottom: 16 }}>
         <Segmented
           label="Credit type"
@@ -43,8 +43,6 @@ export function BorrowPanel() {
 }
 
 function ExternalBorrow() {
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const q = useVaults();
   const raw = q.data?.vaults ?? [];
   const parsed = useMemo(() => raw.map((r) => ({ raw: r, params: toVaultParams(r) })).filter((v): v is { raw: VaultRaw; params: VaultParams } => v.params !== null), [raw]);
@@ -55,7 +53,6 @@ function ExternalBorrow() {
   const [vaultId, setVaultId] = useState<number | null>(null);
   const chosen = pairs.find((p) => p.params.vaultId === vaultId) ?? pairs[0] ?? null;
 
-  if (!demo && network !== "mainnet") return <EmptyState title="Jupiter Lend runs on mainnet">Switch the network in settings to see markets.</EmptyState>;
   if (q.isLoading) return <p className={styles.meta}>Loading markets…</p>;
   if (q.isError)
     return (
@@ -91,8 +88,6 @@ function ExternalBorrow() {
 }
 
 function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address);
   const balances = usePublicBalances();
   const positionsQ = useBorrowPositions();
@@ -139,16 +134,16 @@ function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
   const wsolHeld = (balances.data?.tokens ?? []).filter((t) => t.mint === NATIVE_SOL_MINT).reduce((a, t) => a + t.amount, 0n);
   const colBalance = colMint === NATIVE_SOL_MINT ? wsolHeld : (publicBalanceOf(balances.data, colMint) ?? 0n);
   const debtBalance = publicBalanceOf(balances.data, vault.debtMint) ?? 0n;
-  const needsWrap = !demo && colMint === NATIVE_SOL_MINT && collateralDelta > 0n && wsolHeld < collateralDelta;
-  const insufficientCol = !demo && collateralDelta > 0n && colMint !== NATIVE_SOL_MINT && collateralDelta > colBalance;
-  const insufficientDebt = !demo && debtDelta < 0n && -debtDelta > debtBalance;
+  const needsWrap = colMint === NATIVE_SOL_MINT && collateralDelta > 0n && wsolHeld < collateralDelta;
+  const insufficientCol = collateralDelta > 0n && colMint !== NATIVE_SOL_MINT && collateralDelta > colBalance;
+  const insufficientDebt = debtDelta < 0n && -debtDelta > debtBalance;
   const nothing = collateralDelta === 0n && debtDelta === 0n;
 
   const healthTone = (h: Ratio | null) => (!h ? "good" : h.num * 100n < h.den * 110n ? "danger" : h.num * 100n < h.den * 130n ? "warn" : "good");
   let action = "Review";
   let disabled = false;
   if (!address) {
-    action = demo ? "Use demo wallet" : "Connect wallet";
+    action = "Connect wallet";
   } else if (nothing) {
     action = "Enter an amount";
     disabled = true;
@@ -196,7 +191,7 @@ function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
             {vault.oracleTimestampMs ? `${formatAge(oracleCheck.ageMs)} ago` : "Not reported"} ({raw.oracleSources.map((s) => Object.keys(s.sourceType ?? {})[0] ?? "source").join(", ") || "unknown source"})
           </Row>
           <Row label="Independent check" tone="muted">
-            {oracleCheck.deviationBps !== null ? `Pyth differs by ${(Number(oracleCheck.deviationBps) / 100).toFixed(2)}%` : oracle.isError ? "Pyth unavailable right now" : demo ? "Not in demo" : "No current Pyth price for this pair"}
+            {oracleCheck.deviationBps !== null ? `Pyth differs by ${(Number(oracleCheck.deviationBps) / 100).toFixed(2)}%` : oracle.isError ? "Pyth unavailable right now" : "No current Pyth price for this pair"}
           </Row>
         </dl>
         {!oracleCheck.ok ? (
@@ -287,7 +282,7 @@ function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
                   type="button"
                   className="link"
                   style={{ background: "none", border: 0, padding: 0, color: "inherit", font: "inherit" }}
-                  onClick={() => void txFlow.start(wrapSpec({ action: "wrap", lamports: collateralDelta - wsolHeld + 10_000n, network, signer: address!, demo, onSettled: () => void balances.refetch() }))}
+                  onClick={() => void txFlow.start(wrapSpec({ action: "wrap", lamports: collateralDelta - wsolHeld + 10_000n, network: NETWORK, signer: address!, onSettled: () => void balances.refetch() }))}
                 >
                   Review wrapping SOL
                 </button>
@@ -315,9 +310,8 @@ function VaultDetail({ raw, vault }: { raw: VaultRaw; vault: VaultParams }) {
                   collateralDelta,
                   debtDelta: repayAll ? 0n : debtDelta,
                   repayAll,
-                  network,
+                  network: NETWORK,
                   signer: address,
-                  demo,
                   available: collateralDelta > 0n ? colBalance : debtBalance,
                   onSettled: () => {
                     void positionsQ.refetch();

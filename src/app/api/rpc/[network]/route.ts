@@ -49,7 +49,7 @@ const payload = z.union([call, z.array(call).min(1).max(20)]);
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ network: string }> }) {
   const { network } = await ctx.params;
-  if (network !== "mainnet" && network !== "devnet") return badRequest("Unknown network");
+  if (network !== "mainnet") return badRequest("NOCT runs on mainnet only");
   const blocked = sameOriginGuard(req) ?? rateLimit(req, "rpc");
   if (blocked) return blocked;
   try {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ network: s
       }
     }
     const started = Date.now();
-    const result = await upstreamJson(rpcUrl(network), {
+    const result = await upstreamJson(rpcUrl(), {
       service: `rpc-${network}`,
       method: "POST",
       body: parsed.data,

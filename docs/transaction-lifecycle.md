@@ -60,11 +60,15 @@ The full transition table is in `TRANSITIONS`; any other transition throws `Inva
 | Wallet modifies the transaction unverifiably | `rejected`; nothing sent |
 | Recipient not registered for private transfers | Failure with an explicit alternative: review a public withdrawal (with downgrade consent) |
 | Jupiter reports failure with a signature | Reconcile that signature before saying anything about funds |
-| Network change, demo-mode change or lock | Session invalidated; private views cleared; non-in-flight operations cancelled |
+| Wallet or account change, or lock | Session invalidated; private views cleared; non-in-flight operations cancelled |
 
 ## Guided sequences
 
 Some actions are a series of transactions, such as paying from the private balance (move out, swap, move back in). `src/lib/client/sequence.ts` runs them as separate operations: each step is a full `TxSpec` with its own review, checks, simulation and signature, and the next step starts only when the user presses "Continue" after the previous one confirmed. Each step is built from the amounts the previous step settled (for a swap, Jupiter's reported output, or the reviewed minimum if that is unknown); if a step cannot be built from known amounts it stops with a message instead of guessing. "Stop here" ends the series and says where the funds are.
+
+## What the ring shows
+
+The ring beside the swap and the smaller one in the transaction dialog follow the same phases: it breathes while the wallet is asked to sign (`preparing`), lights race round it while the transaction is on its way (`submitting`, `confirming`, `pendingRecovery`), and it flares when the operation lands (`completed`); a failure turns its centre coral for a moment. It is decoration on top of the coordinator's state, never a source of it: every state it shows is also stated in words (the dialog's status button, notes and receipt). With reduced motion it does not turn or race; only its brightness changes.
 
 ## Where the guarantees stop
 

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePrivate, useSettings, useSettingsReady, useWallet } from "@/lib/client/stores";
+import { NETWORK } from "@/lib/operations/intent";
+import { usePrivate, useSettingsReady, useWallet } from "@/lib/client/stores";
 import { solanaRpc } from "@/lib/client/rpc";
 import { shortAddress } from "@/lib/tokens/sanitize";
 import { disconnect } from "@/lib/client/session";
@@ -12,20 +13,15 @@ import { CopyButton } from "@/components/ui/primitives";
 import styles from "./shell.module.css";
 
 function useRpcHealth(): "ok" | "slow" | "down" | "idle" {
-  const network = useSettings((s) => s.network);
-  const demo = useSettings((s) => s.demoMode);
   const ready = useSettingsReady();
   const [state, setState] = useState<"ok" | "slow" | "down" | "idle">("idle");
   useEffect(() => {
-    if (demo || !ready) {
-      setState("idle");
-      return;
-    }
+    if (!ready) return;
     let cancelled = false;
     const check = async () => {
       const started = performance.now();
       try {
-        await solanaRpc.getSlot(network);
+        await solanaRpc.getSlot(NETWORK);
         if (!cancelled) setState(performance.now() - started > 2500 ? "slow" : "ok");
       } catch {
         if (!cancelled) setState("down");
@@ -37,32 +33,26 @@ function useRpcHealth(): "ok" | "slow" | "down" | "idle" {
       cancelled = true;
       clearInterval(t);
     };
-  }, [network, demo, ready]);
+  }, [ready]);
   return state;
 }
 
 export function TopBar() {
-  const network = useSettings((s) => s.network);
-  const demo = useSettings((s) => s.demoMode);
   const { address, status, option } = useWallet();
   const health = useRpcHealth();
   const privateOpen = usePrivate((s) => s.status === "ready");
   const [menu, setMenu] = useState(false);
-  const healthText = demo ? "Demo data" : health === "ok" ? "RPC healthy" : health === "slow" ? "RPC slow" : health === "down" ? "RPC unreachable" : "Checking RPC";
+  const healthText = health === "ok" ? "RPC healthy" : health === "slow" ? "RPC slow" : health === "down" ? "RPC unreachable" : "Checking RPC";
 
   return (
     <header className={styles.topbar}>
-      {demo ? <div className={styles.demoEdge} aria-hidden="true" /> : null}
       <div className={styles.brand}>
-        <Link href="/" className={styles.wordmark} aria-label="noct, swap">
-          <MoonMark size={22} />
+        <Link href="/swap" className={styles.wordmark} aria-label="noct, swap">
+          <span data-ring-home style={{ display: "inline-flex" }}>
+            <MoonMark size={24} />
+          </span>
           <span className={styles.wordmarkText}>noct</span>
         </Link>
-        {demo ? (
-          <span className={styles.demoPill} role="status">
-            Demo mode
-          </span>
-        ) : null}
       </div>
       <div className={styles.topRight}>
         {privateOpen ? (
@@ -73,8 +63,8 @@ export function TopBar() {
           </button>
         ) : null}
         <span className={styles.netPill} title={healthText}>
-          <span className={styles.dot} data-state={demo ? "slow" : health === "idle" ? undefined : health} aria-hidden="true" />
-          <span>{network === "mainnet" ? "Mainnet" : "Devnet"}</span>
+          <span className={styles.dot} data-state={health === "idle" ? undefined : health} aria-hidden="true" />
+          <span>Mainnet</span>
           <span className="vh">, {healthText}</span>
         </span>
         {status === "connected" && address ? (
@@ -94,7 +84,7 @@ export function TopBar() {
             disabled={status === "connecting"}
           >
             <Icon name="wallet" size={16} />
-            {status === "connecting" ? "Connecting…" : demo ? "Demo wallet" : "Connect wallet"}
+            {status === "connecting" ? "Connecting…" : "Connect wallet"}
           </button>
         )}
       </div>

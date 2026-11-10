@@ -161,17 +161,13 @@ function SendPreview() {
 }
 
 function EarnPreview({ onOpen }: { onOpen(): void }) {
-  const network = useSettings((s) => s.network);
-  const demo = useSettings((s) => s.demoMode);
   const q = useEarnMarkets();
   const markets = (q.data?.markets ?? []).map(toEarnMarket).filter((m): m is NonNullable<typeof m> => Boolean(m));
   const top = [...markets].sort((a, b) => Number(b.totalRateBps - a.totalRateBps)).slice(0, 3);
   return (
     <>
       <p className={styles.previewTitle}>Earn</p>
-      {!demo && network !== "mainnet" ? (
-        <p className={styles.previewText}>Jupiter Lend markets exist on mainnet only.</p>
-      ) : q.isLoading ? (
+      {q.isLoading ? (
         <p className={styles.previewText}>Loading markets…</p>
       ) : q.isError ? (
         <p className={styles.previewText}>Markets are unavailable right now.</p>

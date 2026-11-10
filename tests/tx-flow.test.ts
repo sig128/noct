@@ -72,13 +72,14 @@ async function setup(opts: { reject?: number } = {}) {
   return { address, sign };
 }
 
+const simulateOk: RpcHandler = (method) => (method === "simulateTransaction" ? { context: { slot: 1 }, value: { err: null, logs: [], unitsConsumed: 1000 } } : null);
+
 function spec(signer: string, over: Partial<TxSpec> = {}, wirePrograms: string[] = [PROGRAMS.jupiterAggregatorV6]): TxSpec {
   return {
     kind: "swap",
     title: "Test swap",
     network: "mainnet",
     signer,
-    demo: false,
     disclosure: PROFILES.publicSwap,
     requestedPrivacy: "public",
     activityDetail: "1 SOL",
@@ -193,12 +194,12 @@ describe("transaction coordinator", () => {
 
   it("a weaker privacy outcome needs the user's explicit acceptance", async () => {
     const { address } = await setup();
+    stubRpc(simulateOk);
     await txFlow.start(
       spec(address, {
-        demo: true,
         requestedPrivacy: "confidential_transfer",
         downgradeNotice: "This becomes a public withdrawal.",
-        submit: async () => ({ status: "confirmed", signature: "demo-1", rows: [] }),
+        submit: async () => ({ status: "confirmed", signature: "sig-1", rows: [] }),
       }),
     );
     expect(txFlow.canApprove()).toEqual({ ok: false, reason: "Confirm the privacy change to continue." });
@@ -210,44 +211,45 @@ describe("transaction coordinator", () => {
   });
 
   it("refuses to reserve funds another operation already holds", async () => {
-    const { address } = await setup();
+    const { address, sign } = await setup();
+    stubRpc(simulateOk);
     reservations.reserve({ operationId: "other", mint: "So11111111111111111111111111111111111111112", amount: 900n, source: "public" }, 1_000n);
-    await txFlow.start(spec(address, { demo: true, reserve: { mint: "So11111111111111111111111111111111111111112", amount: 500n, source: "public", available: 1_000n }, submit: async () => ({ status: "confirmed", signature: "demo-2" }) }));
+    await txFlow.start(spec(address, { reserve: { mint: "So11111111111111111111111111111111111111112", amount: 500n, source: "public", available: 1_000n }, submit: async () => ({ status: "confirmed", signature: "sig-2" }) }));
     await txFlow.approve();
     expect(useTxFlow.getState().phase).toBe("awaitingApproval");
     expect(useTxFlow.getState().error).toMatch(/Another operation/);
+    expect(sign).not.toHaveBeenCalled();
   });
 });
 
 describe("guided sequences (paying from the private balance)", () => {
-  const demoStep = (title: string, outputs: Record<string, string> | undefined, privacy: "public" | "confidential_transfer" = "public", notice?: string): TxSpec => ({
-    kind: "swap",
-    title,
-    network: "mainnet",
-    signer: "DemoSigner11111111111111111111111111111111",
-    demo: true,
-    disclosure: PROFILES.publicSwap,
-    requestedPrivacy: privacy,
-    downgradeNotice: notice,
-    activityDetail: title,
-    primaryLabel: "Simulate",
-    async build({ operationId }): Promise<BuiltTx> {
-      return { wire: new Uint8Array(), lastValidBlockHeight: null, intent: intentFor("DemoSigner11111111111111111111111111111111", operationId), rows: [], expiresAt: Date.now() + 20_000 };
-    },
-    submit: async () => ({ status: "confirmed", signature: `demo-${title}`, outputs }),
+  let signer = "";
+  // Each step is a full operation: real wire bytes, policy check, simulation and a wallet signature.
+  const step = (title: string, outputs: Record<string, string> | undefined, privacy: "public" | "confidential_transfer" = "public", notice?: string): TxSpec =>
+    spec(signer, {
+      title,
+      requestedPrivacy: privacy,
+      downgradeNotice: notice,
+      activityDetail: title,
+      submit: async () => ({ status: "confirmed", signature: `sig-${title}`, outputs }),
+    });
+
+  beforeEach(async () => {
+    signer = (await setup()).address;
+    stubRpc(simulateOk);
   });
 
   it("runs each step only after the previous one confirmed, passing settled amounts forward", async () => {
     const { sequence, useSequence } = await import("@/lib/client/sequence");
     const seen: Record<string, string>[] = [];
     await sequence.start("Private-balance swap", [
-      { label: "move out", spec: () => demoStep("out", undefined, "confidential_transfer", "This runs in three public steps.") },
-      { label: "swap", spec: () => demoStep("swap", { received: "4200", minimum: "4100" }) },
+      { label: "move out", spec: () => step("out", undefined, "confidential_transfer", "This runs in three public steps.") },
+      { label: "swap", spec: () => step("swap", { received: "4200", minimum: "4100" }) },
       {
         label: "move in",
         spec: (o) => {
           seen.push({ ...o });
-          return demoStep(`in-${o.received}`, undefined);
+          return step(`in-${o.received}`, undefined);
         },
       },
     ]);
@@ -275,8 +277,8 @@ describe("guided sequences (paying from the private balance)", () => {
   it("does not advance before the current step completes", async () => {
     const { sequence, useSequence } = await import("@/lib/client/sequence");
     await sequence.start("Two steps", [
-      { label: "a", spec: () => demoStep("a", undefined) },
-      { label: "b", spec: () => demoStep("b", undefined) },
+      { label: "a", spec: () => step("a", undefined) },
+      { label: "b", spec: () => step("b", undefined) },
     ]);
     await sequence.advance();
     expect(useSequence.getState().index).toBe(0);
@@ -287,7 +289,7 @@ describe("guided sequences (paying from the private balance)", () => {
   it("stops with a message instead of guessing when a step cannot be built", async () => {
     const { sequence, useSequence } = await import("@/lib/client/sequence");
     await sequence.start("Broken", [
-      { label: "a", spec: () => demoStep("a", undefined) },
+      { label: "a", spec: () => step("a", undefined) },
       {
         label: "b",
         spec: () => {

@@ -2,11 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useCapabilities } from "@/lib/client/hooks";
-import { usePrivate, useSettings, useSettingsReady, useWallet } from "@/lib/client/stores";
+import { NETWORK } from "@/lib/operations/intent";
+import { usePrivate, useSettings, useSettingsReady } from "@/lib/client/stores";
 import { GOVERNED_PROGRAMS, readProgramAuthority } from "@/lib/client/governance";
 import { shortAddress } from "@/lib/tokens/sanitize";
 import { ModulePanel } from "@/components/shell/ModulePanel";
-import { Row, Segmented, Toggle } from "@/components/ui/primitives";
+import { Row, Toggle } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/Icon";
 import { Select } from "./common";
 import styles from "./panels.module.css";
@@ -22,28 +23,7 @@ export function SecuritySettings() {
           Preferences
         </h2>
         <Toggle checked={s.maskBalances} onChange={s.setMaskBalances} label="Hide amounts" description="Replaces balances and amounts with a tint everywhere, including previews." />
-        <Toggle
-          checked={s.demoMode}
-          onChange={s.setDemoMode}
-          label="Demo mode"
-          description="Made-up balances, rates and quotes for presentation. Cannot sign or send anything, and is marked on every screen."
-        />
         <div style={{ display: "grid", gap: 12, paddingTop: 8 }}>
-          <div>
-            <span className={styles.fieldLabel}>Network</span>
-            <Segmented
-              label="Network"
-              value={s.network}
-              onChange={s.setNetwork}
-              options={[
-                { value: "mainnet", label: "Mainnet" },
-                { value: "devnet", label: "Devnet" },
-              ]}
-            />
-            <p className={styles.hint} style={{ marginTop: 6 }}>
-              Swaps and Jupiter Lend are mainnet only. Changing network locks the private balance and clears protected views.
-            </p>
-          </div>
           <Select
             label="Lock the private balance after inactivity"
             value={String(s.lockAfterMinutes)}
@@ -90,14 +70,12 @@ export function SecuritySettings() {
         ) : caps.data ? (
           <dl>
             <Row label="Swap routing">Jupiter Swap API v2 ({caps.data.jupiter.keyed ? "API key set" : "keyless, low rate limit"})</Row>
-            <Row label="Private balances, devnet" tone={caps.data.privacy.devnet.enabled ? "accent" : "muted"}>
-              {caps.data.privacy.devnet.enabled ? `Enabled (${caps.data.privacy.sdk})` : (caps.data.privacy.devnet.reason ?? "Off")}
-            </Row>
-            <Row label="Private balances, mainnet" tone={caps.data.privacy.mainnet.enabled ? "accent" : "muted"}>
-              {caps.data.privacy.mainnet.enabled ? "Enabled by operator" : (caps.data.privacy.mainnet.reason ?? "Off")}
+            <Row label="Network">Solana mainnet only</Row>
+            <Row label="Private balances" tone={caps.data.privacy.enabled ? "accent" : "muted"}>
+              {caps.data.privacy.enabled ? `Enabled (${caps.data.privacy.sdk})` : (caps.data.privacy.reason ?? "Off")}
             </Row>
             <Row label="Independent oracle">{caps.data.pyth.configured ? "Pyth via Hermes (API key)" : "Pyth feeds read on chain"}</Row>
-            <Row label="Mainnet RPC">{caps.data.rpc.mainnet.publicDefault ? "Public endpoint (rate limited)" : "Dedicated endpoint"}</Row>
+            <Row label="RPC">{caps.data.rpc.publicDefault ? "Public endpoint (rate limited)" : "Dedicated endpoint"}</Row>
           </dl>
         ) : (
           <p className={styles.meta}>Reading…</p>
@@ -130,14 +108,11 @@ function RecoveryFlow() {
 }
 
 function Governance() {
-  const network = useSettings((s) => s.network);
-  const demo = useSettings((s) => s.demoMode);
-  const address = useWallet((s) => s.address);
   const ready = useSettingsReady();
   const q = useQuery({
-    queryKey: ["governance", network],
-    queryFn: () => Promise.all(GOVERNED_PROGRAMS.map((p) => readProgramAuthority(network, p.program, p.label))),
-    enabled: ready && !demo,
+    queryKey: ["governance"],
+    queryFn: () => Promise.all(GOVERNED_PROGRAMS.map((p) => readProgramAuthority(NETWORK, p.program, p.label))),
+    enabled: ready,
     staleTime: 10 * 60_000,
   });
   return (
@@ -146,12 +121,10 @@ function Governance() {
         <h2 id="gov-h" className={styles.h2}>
           Who can change the programs
         </h2>
-        <span className={styles.meta}>{network}</span>
+        <span className={styles.meta}>Mainnet</span>
       </div>
       <p className={styles.lead}>A program with an upgrade authority can be replaced, including the rules about who can move funds. NOCT reads this from the chain rather than trusting a claim.</p>
-      {demo ? (
-        <p className={styles.meta}>Not read in demo mode.</p>
-      ) : q.isLoading ? (
+      {q.isLoading ? (
         <p className={styles.meta}>Reading program accounts…</p>
       ) : (
         <dl>
@@ -162,7 +135,7 @@ function Governance() {
                 : p.state === "immutable"
                   ? "Immutable"
                   : p.state === "missing"
-                    ? "Not deployed on this network"
+                    ? "Not deployed on mainnet"
                     : p.state === "not_upgradeable_loader"
                       ? "Not upgradeable-loader program"
                       : "Could not be read"}
@@ -170,7 +143,6 @@ function Governance() {
           ))}
         </dl>
       )}
-      {!address ? null : null}
     </section>
   );
 }

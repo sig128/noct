@@ -22,7 +22,7 @@ Short and blocking: every unchecked line is a reason not to ship.
 
 ## Before private balances
 
-- [ ] Devnet: unlock, register, deposit, private transfer between two wallets, public withdrawal and recovery on a second device all work with `HELIUS_API_KEY`
+- [ ] Mainnet, small amounts: unlock, register, deposit, private transfer between two wallets, public withdrawal and recovery on a second device all work with `HELIUS_API_KEY` and `SPR_MAINNET_ENABLED=true`
 - [ ] Wallets in scope sign version-1 transactions
 - [ ] Privacy Rings audit reports (Certora, OtterSec, ZK Security per Helius) read; the reported `private_tx_hash` linkability finding confirmed fixed
 - [x] Helius lists mainnet as launched (2026-11-10)

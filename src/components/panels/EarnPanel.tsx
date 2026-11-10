@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatAmount, formatBps, parseUnits, minBig } from "@/lib/decimal";
 import { useEarnMarkets, useEarnPositions, usePublicBalances, publicBalanceOf } from "@/lib/client/hooks";
-import { useHandoff, useSettings, useWallet } from "@/lib/client/stores";
+import { NETWORK } from "@/lib/operations/intent";
+import { useHandoff, useWallet } from "@/lib/client/stores";
 import { earnSpec, previewShares, sharesToAssets, toEarnMarket, type EarnMarket } from "@/lib/client/lend";
 import { txFlow } from "@/lib/client/tx-flow";
 import { formatAge } from "@/lib/credit/vault-math";
@@ -11,15 +12,13 @@ import { maxSpendable } from "@/lib/swap/max";
 import { PROFILES, UNAVAILABLE } from "@/lib/privacy/model";
 import { NATIVE_SOL_MINT } from "@/lib/tokens/types";
 import { ModulePanel } from "@/components/shell/ModulePanel";
-import { EmptyState, Row, Segmented, Sensitive } from "@/components/ui/primitives";
+import { Row, Segmented, Sensitive } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/Icon";
 import { DisclosurePreview } from "@/components/swap/DisclosurePreview";
 import { AmountField, AssetCell } from "./common";
 import styles from "./panels.module.css";
 
 export function EarnPanel() {
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const q = useEarnMarkets();
   const positions = useEarnPositions();
   const handoff = useHandoff();
@@ -45,11 +44,8 @@ export function EarnPanel() {
       id="earn"
       title="Earn"
       lead="Supply to Jupiter Lend. Positions are public and held by your wallet as receipt tokens; rates are variable."
-      badge={demo ? <span className="chip chip-warn">Demo rates</span> : null}
     >
-      {!demo && network !== "mainnet" ? (
-        <EmptyState title="Jupiter Lend runs on mainnet">Switch the network in settings to see markets.</EmptyState>
-      ) : q.isLoading ? (
+      {q.isLoading ? (
         <p className={styles.meta}>Loading markets…</p>
       ) : q.isError ? (
         <div className="note note-error">
@@ -93,8 +89,6 @@ export function EarnPanel() {
 }
 
 function MarketDetail({ market, fromSwap, positions }: { market: EarnMarket; fromSwap: boolean; positions: { receiptMint: string; shares: bigint }[] }) {
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address);
   const balances = usePublicBalances();
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
@@ -150,7 +144,7 @@ function MarketDetail({ market, fromSwap, positions }: { market: EarnMarket; fro
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {!address ? (
           <button type="button" className="btn" onClick={() => useWallet.getState().set({ pickerOpen: true })}>
-            {demo ? "Use demo wallet" : "Connect wallet to supply"}
+            Connect wallet to supply
           </button>
         ) : (
           <>
@@ -197,9 +191,8 @@ function MarketDetail({ market, fromSwap, positions }: { market: EarnMarket; fro
                     market,
                     amount,
                     available: depositMax,
-                    network,
+                    network: NETWORK,
                     signer: address,
-                    demo,
                     onSettled: () => void balances.refetch(),
                   }),
                 )

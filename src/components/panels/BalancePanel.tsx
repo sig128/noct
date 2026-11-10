@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { formatAmount, formatUsd, parseDecimalRatio, parseUnits, valueOf, type Ratio } from "@/lib/decimal";
 import { buildLedger, BUCKET_LABELS, type Bucket } from "@/lib/balances/ledger";
 import { useBorrowPositions, useEarnMarkets, useEarnPositions, usePrices, usePublicBalances, useTokensByMint, useVaults, publicBalanceOf } from "@/lib/client/hooks";
-import { reservations, usePrivate, useSettings, useWallet } from "@/lib/client/stores";
+import { NETWORK } from "@/lib/operations/intent";
+import { reservations, usePrivate, useWallet } from "@/lib/client/stores";
 import { checkUnlock, resyncPrivate, unlockPrivate } from "@/lib/client/session";
 import { sharesToAssets, toEarnMarket, wrapSpec } from "@/lib/client/lend";
 import { shieldSpec, withdrawalSpec, registrationSpec } from "@/lib/client/private-specs";
@@ -23,8 +24,6 @@ import styles from "./panels.module.css";
 const WSOL_ACCOUNT_MARK = "wsol";
 
 export function BalancePanel() {
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address);
   const priv = usePrivate();
   const balances = usePublicBalances();
@@ -73,14 +72,13 @@ export function BalancePanel() {
       id="balance"
       title="Balance"
       lead="One account across every tool. Each amount appears in exactly one place, so supplied and collateral funds are not counted twice."
-      badge={demo ? <span className="chip chip-warn">Demo data</span> : null}
     >
       {!address ? (
         <EmptyState
           title="Connect a wallet to see balances"
           action={
             <button type="button" className="btn" onClick={() => useWallet.getState().set({ pickerOpen: true })}>
-              {demo ? "Use demo wallet" : "Connect wallet"}
+              Connect wallet
             </button>
           }
         >
@@ -120,7 +118,7 @@ export function BalancePanel() {
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => void txFlow.start(wrapSpec({ action: "unwrap", lamports: 0n, network, signer: address, demo, onSettled: () => void balances.refetch() }))}
+                  onClick={() => void txFlow.start(wrapSpec({ action: "unwrap", lamports: 0n, network: NETWORK, signer: address, onSettled: () => void balances.refetch() }))}
                 >
                   Unwrap wSOL to SOL
                 </button>
@@ -235,8 +233,6 @@ function HoldingRow({ mint, amount, sub, prices, debt }: { mint: string; amount:
 
 function PrivateSection() {
   const priv = usePrivate();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address)!;
   const balances = usePublicBalances();
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
@@ -287,7 +283,7 @@ function PrivateSection() {
           }}
         >
           {busy ? <Spinner size={15} /> : <Icon name="unlock" size={16} />}
-          {priv.status === "unlocking" ? "Waiting for signature…" : priv.status === "syncing" ? "Reading your notes…" : demo ? "Unlock demo balance" : "Unlock private balance"}
+          {priv.status === "unlocking" ? "Waiting for signature…" : priv.status === "syncing" ? "Reading your notes…" : "Unlock private balance"}
         </button>
       </section>
     );
@@ -339,7 +335,7 @@ function PrivateSection() {
           <Icon name="info" size={16} />
           <span>
             Not registered: others cannot send to you privately yet.{" "}
-            <button type="button" className="link" style={{ background: "none", border: 0, padding: 0, color: "inherit", font: "inherit" }} onClick={() => void txFlow.start(registrationSpec({ network, signer: address, demo }))}>
+            <button type="button" className="link" style={{ background: "none", border: 0, padding: 0, color: "inherit", font: "inherit" }} onClick={() => void txFlow.start(registrationSpec({ network: NETWORK, signer: address }))}>
               Review registration
             </button>
           </span>
@@ -362,8 +358,6 @@ function PrivateSection() {
 }
 
 function DepositForm({ mints }: { mints: string[] }) {
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address)!;
   const balances = usePublicBalances();
   const [mint, setMint] = useState(mints[0] ?? NATIVE_SOL_MINT);
@@ -384,9 +378,8 @@ function DepositForm({ mints }: { mints: string[] }) {
         if (!amount || over) return;
         void txFlow.start(
           shieldSpec({
-            network,
+            network: NETWORK,
             signer: address,
-            demo,
             assetMint: mint,
             symbol: label.symbol,
             decimals: label.decimals,
@@ -418,8 +411,6 @@ function DepositForm({ mints }: { mints: string[] }) {
 
 function WithdrawForm() {
   const priv = usePrivate();
-  const demo = useSettings((s) => s.demoMode);
-  const network = useSettings((s) => s.network);
   const address = useWallet((s) => s.address)!;
   const [mint, setMint] = useState(priv.balances[0]?.mint ?? NATIVE_SOL_MINT);
   const [text, setText] = useState("");
@@ -438,7 +429,7 @@ function WithdrawForm() {
         e.preventDefault();
         if (!amount || amount > bal || !validRecipient) return;
         void txFlow.start(
-          withdrawalSpec({ network, signer: address, demo, assetMint: mint, symbol: label.symbol, decimals: label.decimals, amount, token2022: label.token?.tokenProgram === "token2022", recipient: recipient.trim(), requestedPrivacy: "public" }),
+          withdrawalSpec({ network: NETWORK, signer: address, assetMint: mint, symbol: label.symbol, decimals: label.decimals, amount, token2022: label.token?.tokenProgram === "token2022", recipient: recipient.trim(), requestedPrivacy: "public" }),
         );
       }}
     >
