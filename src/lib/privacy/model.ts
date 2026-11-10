@@ -110,6 +110,7 @@ export const PROFILES = {
     evidence: [
       { claim: "Default Ring transfer: asset, amount and memo private; sender and recipient public.", source: "helius.dev/docs/privacy/concepts/overview", verifiedOn: VERIFIED },
       { claim: "zkSecurity audit (Aug 2026) reported a high finding that the public private_tx_hash linked spent notes; check fix status before relying on spend unlinkability.", source: "privacy-rings/audits/zk_security_solana_privacy_rings_v1_audit.pdf", verifiedOn: VERIFIED },
+      { claim: "Default Ring live on Solana mainnet; Helius states the core programs were audited by Certora, OtterSec and ZK Security.", source: "helius.dev/privacy; decrypt.co/382806", verifiedOn: VERIFIED },
     ],
   },
   privateWithdrawal: {
@@ -211,7 +212,7 @@ export function assertNoSilentDowngrade(requested: PrivacyClass, actual: Privacy
 
 export const UNAVAILABLE = {
   privateSwap:
-    "No audited private swap settlement exists. Helius's example swap and escrow programs use insecure deterministic test keys and are marked unsafe for production.",
+    "No private swap is live on mainnet yet. Helius's example swap program uses public test keys, so anyone could forge its proofs; a mainnet version needs its own key setup and an audit.",
   anonymousTransfer:
     "Anonymous transfers need a Custom Ring program. NOCT has no Custom Ring deployment, and Custom Ring mainnet readiness is unverified.",
   privateEarn:

@@ -14,7 +14,7 @@ const schema = z.object({
   SPR_INDEXER_URL_MAINNET: url.default("https://dgcj4pjarvo65.cloudfront.net"),
   SPR_PROVER_URL_MAINNET: url.default("https://d3ky2kt0ntqxt1.cloudfront.net"),
   SPR_POLICY_BASE: url.default("https://d3gbdb0egjwcw9.cloudfront.net/tee-policy"),
-  /** Mainnet private balances stay off until audits are published and reviewed. */
+  /** Operator switch for mainnet private balances (Default Ring launched on mainnet 2026-11-10; beta). */
   SPR_MAINNET_ENABLED: z.enum(["true", "false"]).default("false"),
   PYTH_API_KEY: z.string().min(8).optional(),
   PYTH_HERMES_BASE: url.default("https://pyth.dourolabs.app/hermes"),

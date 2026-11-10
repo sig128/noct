@@ -24,9 +24,10 @@ Short and blocking: every unchecked line is a reason not to ship.
 
 - [ ] Devnet: unlock, register, deposit, private transfer between two wallets, public withdrawal and recovery on a second device all work with `HELIUS_API_KEY`
 - [ ] Wallets in scope sign version-1 transactions
-- [ ] Privacy Rings audit reports published by Helius and read; the reported `private_tx_hash` linkability finding confirmed fixed
-- [ ] Helius lists mainnet as launched; the SDK version and service endpoints re-checked against the docs
-- [ ] Only then: `SPR_MAINNET_ENABLED=true`
+- [ ] Privacy Rings audit reports (Certora, OtterSec, ZK Security per Helius) read; the reported `private_tx_hash` linkability finding confirmed fixed
+- [x] Helius lists mainnet as launched (2026-11-10)
+- [ ] SDK version and service endpoints re-checked against the docs; upgrade `@heliuslabs/spr` when a release matching the deployed 1.0 programs ships
+- [ ] Then: `SPR_MAINNET_ENABLED=true`
 
 ## Never ship
 

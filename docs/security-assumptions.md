@@ -54,7 +54,7 @@ This document states what NOCT trusts, what it defends against, and where its pr
 5. **Version-1 transactions.** Privacy Rings transactions are v1. Whether a given wallet supports v1 in `signTransaction` was not verified with production wallets; NOCT checks the wallet's declared `supportedTransactionVersions` and refuses to unlock a private balance with a wallet that does not list version 1.
 6. **Derivation signature phishing.** Any site that gets a user to sign the same fixed message can read that user's private balance and history. NOCT warns about this; it cannot prevent it.
 7. **Alpha dependencies.** The Privacy Rings SDK is 0.9.0-alpha; Jupiter Lend APIs are beta. Interfaces and behaviour may change.
-8. **Unaudited privacy system.** Helius documents audits as in progress; a reported high-severity linkability finding's fix status is unverified. Mainnet private balances are off by default.
+8. **Beta privacy system.** Helius launched the Default Ring on mainnet on 2026-11-10 and states audits by Certora, OtterSec and ZK Security; the reports were not reviewed here, and an earlier high-severity linkability finding's fix status is unverified. Mainnet private balances are off unless the operator enables them.
 9. **In-memory journal.** Duplicate-spend protection and reconciliation state do not survive closing the tab.
 10. **No account system.** NOCT has no server-side sessions or user records, by design; abuse controls are limited to rate limits.
 11. **Supply chain.** Dependencies are pinned and locked, but not vendored or independently reviewed.

@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
         reason: !heliusKey
           ? "Set HELIUS_API_KEY on the server to use private balances."
           : env.SPR_MAINNET_ENABLED !== "true"
-            ? "Mainnet private balances are off: Helius lists audits as pending and the endpoints as beta. An operator enables them with SPR_MAINNET_ENABLED=true after review."
+            ? "Mainnet private balances are switched off on this deployment. The operator turns them on with SPR_MAINNET_ENABLED=true."
             : null,
       },
     },

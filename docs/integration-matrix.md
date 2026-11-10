@@ -71,12 +71,14 @@ Scales used by the vault math (`src/lib/credit/vault-math.ts`):
 
 - Transport: the browser reaches all three through `/api/spr/{network}/{indexer|prover|policy}`, which adds the API key server-side. Prover requests are encrypted by the SDK to an enclave whose attestation it verifies against pinned policy signers, so the relay sees sizes, timing and routes only.
 - Transactions: version 1 Solana transactions. Wallet support for v1 in `solana:signTransaction` is required and was **not** verified against any production wallet.
-- Launch status, conflicting sources:
-  - Helius privacy docs (helius.dev/docs/privacy, read 2026-11-10): "Status: Beta, devnet only — mainnet has not launched", and the programs are "under audit by three independent security firms", with no reports linked.
-  - The 0.9.0-alpha README lists mainnet indexer and prover endpoints.
-  - An audit report by zkSecurity (v1, August 2026) was observed in the project's repository listing earlier in this build. It reports a high-severity finding that the public `private_tx_hash` linked spent notes. Fix status was not verified.
-  - NOCT therefore keeps **mainnet private balances off** (`SPR_MAINNET_ENABLED=false`) and treats the system as unaudited.
-- Not usable for private swaps: Helius's example swap and escrow programs use deterministic test keys and are marked unsafe for production. NOCT does not route funds through them.
+- Launch status (2026-11-10):
+  - Helius announced the Default Ring **live on Solana mainnet** on 2026-11-10 (helius.dev/privacy: "Solana Privacy Rings are now live on mainnet"). The mainnet addresses page lists the shielded pool `ring1GaLC…ANW`, the user registry `regy3WA…iqDQ`, the state tree `777pvSGe5LaBd9nCczvE2FXEauiwtfGJ5XRpjKyniGor` and the native-SOL interface PDA `CiNmas621VuyofiDSrEPfTXHKrdZuB6jMKECyNiMpLXE`; the program IDs match NOCT's allowlist.
+  - Helius states the core programs were audited by Certora, OtterSec and ZK Security (reported by Decrypt, 2026-11-10). The reports themselves were not reviewed for this build. A zkSecurity v1 report seen earlier described a high-severity finding that the public `private_tx_hash` linked spent notes; its fix status was not verified.
+  - Helius's docs index (`helius.dev/docs/privacy/llms.txt`) still read "Beta, devnet only" on the same day; treat the product as beta.
+  - Custom Rings (anonymous model) are announced for Q4 2026 and are not available.
+  - Helius's example repository notes that `@heliuslabs/spr` 0.9.0-alpha predates the deployed 1.0 programs' per-tree fee defaults and the registry's `update_keys` data; deposits, transfers, withdrawals, registration, sync and history (what NOCT uses) are the flows its examples exercise with it. Upgrade when a matching npm release ships.
+  - Mainnet private balances are controlled by the operator switch `SPR_MAINNET_ENABLED` (default `false` in code).
+- Private swaps: Helius's example swap program (`helius-labs/zolana-examples`, `swap/`) is a maker/taker order between two private balances: the maker locks the amount it sells as a private order, a taker fills it before expiry, and amounts and price stay private while the fact of a swap is public. Its circuits use insecure test keys from a fixed public seed ("anyone can forge their proofs") and its program IDs are example IDs. A mainnet version needs its own trusted setup, verifying keys, program ID and audit, plus a liquidity provider holding inventory privately. NOCT does not route funds through it.
 
 ## Pyth price service
 

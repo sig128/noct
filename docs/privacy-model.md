@@ -61,7 +61,7 @@ Your IP address reaches NOCT's server; upstream providers see the server's addre
 ## Known privacy limitations
 
 - The Default Ring keeps sender and recipient addresses public. Transaction hashes are public in every ring.
-- The zkSecurity report observed during this build describes a high-severity linkability issue (`private_tx_hash` linking spent notes). Until its fix is confirmed, spend unlinkability must not be assumed.
+- A zkSecurity report seen during this build described a high-severity linkability issue (`private_tx_hash` linking spent notes). Helius says the core programs have since been audited by Certora, OtterSec and ZK Security; until the fix is confirmed in a published report, spend unlinkability must not be assumed.
 - Timing and amount correlation between a public deposit and a later public withdrawal can link them, regardless of the pool.
 - NOCT's server, the indexer and the RPC provider see request metadata. Running your own indexer or RPC reduces who sees it; NOCT does not yet support configuring a user-supplied indexer in the UI.
-- Mainnet private balances are disabled by default; see the integration matrix for why.
+- Mainnet private balances are off unless the operator enables them (`SPR_MAINNET_ENABLED=true`); Helius launched the Default Ring on mainnet on 2026-11-10 and still calls it beta.

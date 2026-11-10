@@ -46,7 +46,7 @@ These paths exist end to end in code, compile into the production bundle and use
 | Needs | Unlocks |
 | --- | --- |
 | `HELIUS_API_KEY` | Private balances on devnet (indexer, prover, Helius RPC) |
-| `HELIUS_API_KEY` + `SPR_MAINNET_ENABLED=true` | Private balances on mainnet; keep off until audits are published and reviewed |
+| `HELIUS_API_KEY` + `SPR_MAINNET_ENABLED=true` | Private balances on mainnet (Helius launched the Default Ring on mainnet on 2026-11-10; still beta) |
 | `PYTH_API_KEY` | Independent oracle check before borrowing or withdrawing collateral |
 | `JUPITER_API_KEY` | Higher Jupiter rate limits than the keyless tier |
 | `SOLANA_RPC_URL_MAINNET`, `SOLANA_RPC_URL_DEVNET` | Reliable RPC instead of the rate-limited public endpoints |
@@ -65,11 +65,11 @@ No localnet or devnet program was deployed and no funds were moved in this build
 
 | Item | Reason |
 | --- | --- |
-| Private swaps (class C or D) | No audited settlement exists; Helius's example swap and escrow programs use insecure test keys |
+| Private swaps | Helius's example maker/taker swap uses insecure public test keys; a mainnet version needs its own key setup, an audit and a liquidity provider. Prototyping on a local test chain is in progress |
 | Anonymous transfers (class B) | Need a Custom Ring program; none is deployed for NOCT and Custom Ring mainnet readiness is unverified |
 | Private Earn positions | Jupiter Lend positions are held by a public wallet; no privacy custody integration for receipt tokens |
 | Native confidential credit | See section 4 and docs/credit-model.md |
-| Mainnet private balances by default | Helius documents privacy as beta and devnet-only, with audits in progress |
+| Mainnet private balances by default | Off in code; the operator switches them on per deployment (`SPR_MAINNET_ENABLED=true`) |
 | Persistent operation journal | In memory per tab by design for now; closing the tab during recovery loses the local record |
 | Shared rate-limit store, per-session quotas | Per-instance memory only |
 | Nonce-based CSP | Inline framework scripts are allowed instead |
