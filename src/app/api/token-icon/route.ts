@@ -167,12 +167,16 @@ export async function GET(req: NextRequest) {
   const hosts = iconHosts();
   const onAllowlist = (host: string) => isAllowedIconUrl(`https://${host}/`, hosts) !== null;
   const failures: string[] = [];
+  let served = "";
   const attempt =
     (label: string, run: (signal: AbortSignal) => Promise<Outcome>): Attempt =>
     async (signal) => {
       const startedAt = Date.now();
       const outcome = await run(signal);
-      if (typeof outcome !== "string") return outcome;
+      if (typeof outcome !== "string") {
+        served ||= `${label} after ${Date.now() - startedAt} ms`;
+        return outcome;
+      }
       failures.push(`${label}: ${outcome} after ${Date.now() - startedAt} ms`);
       return null;
     };
@@ -191,9 +195,11 @@ export async function GET(req: NextRequest) {
   // Stop any attempt still running.
   controller.abort();
 
+  // Hosts and statuses only: which icon a person looked at is not logged.
+  const tried = Object.fromEntries(failures.map((f, i) => [`failed${i + 1}`, f]));
+  if (image && failures.length > 0) log("icon.fallback", { served, ...tried });
   if (!image) {
-    // Hosts and statuses only: which icon a person looked at is not logged.
-    log("icon.miss", Object.fromEntries(failures.map((f, i) => [`attempt${i + 1}`, f])));
+    log("icon.miss", tried);
     // Cache misses briefly so a missing icon does not hit the upstream on every view.
     return new Response(null, { status: 404, headers: { "cache-control": "public, max-age=300, s-maxage=600" } });
   }
