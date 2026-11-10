@@ -10,6 +10,7 @@ import type { PrivacyClass } from "@/lib/privacy/model";
 import type { TokenInfo } from "@/lib/tokens/types";
 import type { WalletOption } from "@/lib/wallet/standard";
 import type { PrivacySession, PrivateBalance, PrivateHistoryRow } from "@/lib/adapters/privacy/spr";
+import type { UnlockMethod } from "@/lib/adapters/privacy/unlock";
 import { OperationJournal } from "@/lib/operations/journal";
 import { ReservationBook } from "@/lib/balances/ledger";
 
@@ -168,6 +169,8 @@ export interface PrivateState {
   history: PrivateHistoryRow[];
   registered: boolean | null;
   lastSyncedAt: number | null;
+  /** Which message the wallet signed to unlock (see adapters/privacy/unlock.ts). */
+  method: UnlockMethod | null;
   error: string | null;
   set(partial: Partial<Omit<PrivateState, "set" | "lock">>): void;
   lock(reason?: string): void;
@@ -184,7 +187,7 @@ export function getPrivacySession(): PrivacySession | null {
   return activeSession;
 }
 
-const lockedState = { status: "locked" as const, owner: null, network: null, balances: [], history: [], registered: null, lastSyncedAt: null };
+const lockedState = { status: "locked" as const, owner: null, network: null, balances: [], history: [], registered: null, lastSyncedAt: null, method: null };
 
 export const usePrivate = create<PrivateState>()((set) => ({
   ...lockedState,

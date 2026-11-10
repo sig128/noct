@@ -42,7 +42,7 @@ This document states what NOCT trusts, what it defends against, and where its pr
 
 - Only `solana:signTransaction` and `solana:signMessage` are used. NOCT submits and reconciles itself.
 - A signed transaction whose message differs from the reviewed one is sent only if it passes the same policy again.
-- A derivation-message signature is accepted only if the wallet returns exactly the requested message.
+- A derivation-message signature is accepted only if the wallet returns exactly the requested message. A signature over NOCT's unlock text (used when a wallet refuses the standard message) is verified against the wallet's Ed25519 key before any key is derived from it.
 - A wallet epoch increments on any account or network change; an approval built under an older epoch is refused.
 
 ## Known gaps and operator responsibilities
@@ -52,7 +52,8 @@ This document states what NOCT trusts, what it defends against, and where its pr
 3. **Keyed relays.** Anyone who can reach a deployment can consume its Jupiter, Helius and Pyth quotas within the rate limits, from non-browser clients. Production should add per-session tokens or quotas.
 4. **CSP allows `'unsafe-inline'` scripts and styles.** Required by the framework's inline bootstrap without a nonce pipeline. A nonce-based CSP is the next hardening step. `'wasm-unsafe-eval'` is required by the privacy SDK's hasher.
 5. **Version-1 transactions.** Privacy Rings transactions are v1. Whether a given wallet supports v1 in `signTransaction` was not verified with production wallets; NOCT checks the wallet's declared `supportedTransactionVersions` and refuses to unlock a private balance with a wallet that does not list version 1.
-6. **Derivation signature phishing.** Any site that gets a user to sign the same fixed message can read that user's private balance and history. NOCT warns about this; it cannot prevent it.
+6. **Derivation signature phishing.** Any site that gets a user to sign the same fixed message can read that user's private balance and history. NOCT warns about this; it cannot prevent it. NOCT's unlock text is readable in the wallet and says to sign it only in NOCT, but a wallet such as Phantom will sign it for any site that asks.
+7. **NOCT's unlock text is not part of Privacy Rings.** Its keys come from the SDK's own expansion over a different seed, built from SDK modules (`@heliuslabs/spr/internal` for `roleExpansion`). An SDK upgrade could change those modules; the unit test that compares this expansion with `LocalKeys.fromDerivationSeed` must pass before any upgrade ships.
 7. **Alpha dependencies.** The Privacy Rings SDK is 0.9.0-alpha; Jupiter Lend APIs are beta. Interfaces and behaviour may change.
 8. **Beta privacy system.** Helius launched the Default Ring on mainnet on 2026-11-10 and states audits by Certora, OtterSec and ZK Security; the reports were not reviewed here, and an earlier high-severity linkability finding's fix status is unverified. Mainnet private balances are off unless the operator enables them.
 9. **In-memory journal.** Duplicate-spend protection and reconciliation state do not survive closing the tab.

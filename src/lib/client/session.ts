@@ -4,6 +4,8 @@ import { NETWORK } from "@/lib/operations/intent";
 import { api } from "./api";
 import { getPrivacySession, journal, reservations, setPrivacySession, useActivity, usePrivate, useWallet } from "./stores";
 import { connectWallet, disconnectWallet, onAccountsChanged, signExactMessage, type WalletOption } from "@/lib/wallet/standard";
+import type { UnlockMethod } from "@/lib/adapters/privacy/unlock";
+import type { PrivacySession } from "@/lib/adapters/privacy/spr";
 import { useTxFlow, txFlow } from "./tx-flow";
 
 let offAccountListener: (() => void) | null = null;
@@ -75,6 +77,11 @@ export async function checkUnlock(): Promise<UnlockCheck> {
   return { ok: true, reason: null };
 }
 
+/**
+ * Unlocks with Privacy Rings' standard derivation message, or with NOCT's
+ * unlock text when the wallet refuses that message (Phantom) or the standard
+ * keys do not match this wallet's registration. See adapters/privacy/unlock.ts.
+ */
 export async function unlockPrivate(): Promise<void> {
   const store = usePrivate.getState();
   const check = await checkUnlock();
@@ -84,30 +91,66 @@ export async function unlockPrivate(): Promise<void> {
   }
   const w = useWallet.getState();
   const epoch = w.epoch;
+  const stale = () => useWallet.getState().epoch !== epoch;
   store.set({ status: "unlocking", error: null });
+
+  let method: UnlockMethod = "standard";
+  let firstError: unknown = null;
   try {
-    const { openPrivacySession } = await import("@/lib/adapters/privacy/spr");
-    const session = await openPrivacySession({
-      network: NETWORK,
-      origin: window.location.origin,
-      owner: w.address!,
-      ownerPublicKey: new Uint8Array(w.account!.publicKey),
-      signDerivationMessage: (message) => signExactMessage(w.option!, w.account!, message),
-    });
-    if (useWallet.getState().epoch !== epoch) {
-      session.destroy();
-      return;
+    const [{ openPrivacySession }, { nextUnlockMethod }] = await Promise.all([import("@/lib/adapters/privacy/spr"), import("@/lib/adapters/privacy/unlock")]);
+    /** Derives keys one way, then reads the balance and checks the keys against the wallet's registration. */
+    const open = async (how: UnlockMethod): Promise<{ session: PrivacySession; registration: Uint8Array | null } | null> => {
+      usePrivate.getState().set({ status: "unlocking" });
+      const session = await openPrivacySession({
+        network: NETWORK,
+        origin: window.location.origin,
+        owner: w.address!,
+        ownerPublicKey: new Uint8Array(w.account!.publicKey),
+        method: how,
+        signDerivationMessage: (message) => signExactMessage(w.option!, w.account!, message),
+      });
+      if (stale()) {
+        session.destroy();
+        return null;
+      }
+      setPrivacySession(session);
+      usePrivate.getState().set({ status: "syncing", owner: w.address, network: NETWORK });
+      try {
+        await session.sync();
+        return { session, registration: await session.buildRegistration() };
+      } catch (error) {
+        if (getPrivacySession() === session) setPrivacySession(null);
+        throw error;
+      }
+    };
+
+    let opened: Awaited<ReturnType<typeof open>>;
+    try {
+      opened = await open(method);
+    } catch (error) {
+      const next = nextUnlockMethod(method, error);
+      if (!next || stale()) throw error;
+      firstError = error;
+      method = next;
+      opened = await open(method);
     }
-    setPrivacySession(session);
-    usePrivate.getState().set({ status: "syncing", owner: w.address, network: NETWORK });
-    await session.sync();
-    const registration = await session.buildRegistration();
-    if (useWallet.getState().epoch !== epoch || getPrivacySession() !== session) return;
-    usePrivate.getState().set({ status: "ready", balances: session.balances(), history: session.history(), registered: registration === null, lastSyncedAt: Date.now() });
+    if (!opened || stale() || getPrivacySession() !== opened.session) return;
+    const { session, registration } = opened;
+    usePrivate.getState().set({ status: "ready", method, balances: session.balances(), history: session.history(), registered: registration === null, lastSyncedAt: Date.now() });
   } catch (error) {
     setPrivacySession(null);
-    usePrivate.getState().set({ status: "error", error: (error as Error).message || "The private balance could not be unlocked." });
+    usePrivate.getState().set({ status: "error", error: unlockError(error, method, firstError, w.option?.name ?? "This wallet") });
   }
+}
+
+/** The message to show when unlocking fails. */
+export function unlockError(error: unknown, method: UnlockMethod, firstError: unknown, walletName: string): string {
+  const mismatch = (error as { code?: unknown } | null)?.code === "WALLET_USER_RECORD_KEYS_MISMATCH";
+  const refusedStandard = (firstError as { code?: unknown } | null)?.code === "refused_format" || (firstError as { code?: unknown } | null)?.code === "altered_message";
+  if (method === "noct" && mismatch && refusedStandard) {
+    return `This wallet's private balance was set up with Privacy Rings' standard message, which ${walletName} won't sign. Open it with a wallet app that signs that message, using the same account.`;
+  }
+  return (error as Error | null)?.message || "The private balance could not be unlocked.";
 }
 
 export async function resyncPrivate(): Promise<void> {

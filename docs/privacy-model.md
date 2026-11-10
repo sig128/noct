@@ -54,9 +54,23 @@ Your IP address reaches NOCT's server; upstream providers see the server's addre
 ## Keys and recovery
 
 - Unlocking asks the wallet to sign **one fixed message** (`ed25519DerivationMessage` from the SDK). The SDK derives the viewing and nullifier keys from that signature in the tab's memory; NOCT zeroes the signature buffer immediately and never stores or sends it.
+- **Wallets that refuse that message.** The SDK's message is a Solana off-chain message v0, and the SDK accepts only a signature over exactly those bytes. Phantom refuses it ("You cannot sign solana transactions using sign message"). When a wallet refuses it (or returns a signature over altered bytes), NOCT asks the wallet to sign NOCT's own unlock text instead, shown below. The signature is checked against the wallet's key and expanded into keys exactly as the SDK expands a standard seed (`roleExpansion`, `ViewingKey`, `NullifierKey`, `ShieldedAddress.fromPublicKeys`, `LocalKeys.fromKeys`); a test checks that this expansion gives the SDK's own keys for the same seed. Only the seed differs, so the keys differ from the standard ones.
+- **What that means.** A balance unlocked with NOCT's text opens in any app that uses the same text and the same expansion, such as NOCT. Other Privacy Rings apps derive the standard keys and will not see it. The wallet's on-chain registration records whichever keys registered first; if the standard keys do not match it, NOCT tries its text, and if a Phantom-unlocked wallet's registration holds the standard keys, NOCT says the balance must be opened with a wallet app that signs the standard message, with the same account.
+- NOCT's unlock text, which must never change (`noctUnlockText` in `src/lib/adapters/privacy/unlock.ts`; the wallet signs its UTF-8 bytes):
+
+  ```text
+  NOCT private balance
+
+  Sign to open your private balance (Solana Privacy Rings) in NOCT. Signing is free and moves no funds.
+
+  Only sign this in NOCT. Anyone who gets this signature can see your private balance and history.
+
+  Wallet: <the wallet's address>
+  Key version: 1
+  ```
 - Spending still needs the wallet's own transaction signature every time. The derived keys can read, not spend.
 - Anyone who obtains the derivation signature can read the private balance and history. NOCT warns users to sign that message only on NOCT.
-- Recovery: connect the same wallet on any device and unlock again; the balance is rebuilt from the chain through the indexer. Any client built on the Privacy Rings SDK can derive the same keys from the same wallet and withdraw. If the wallet's keys are lost, the private balance is lost with them.
+- Recovery: connect the same wallet on any device and unlock again; the balance is rebuilt from the chain through the indexer. With the standard message, any client built on the Privacy Rings SDK can derive the same keys from the same wallet and withdraw; with NOCT's text, any client that repeats the steps above can. If the wallet's keys are lost, the private balance is lost with them.
 - Locking (manual, after inactivity, on a wallet or account change, when the page is hidden with zero auto-lock, on page unload) destroys the session and clears decrypted state from memory.
 
 ## Known privacy limitations

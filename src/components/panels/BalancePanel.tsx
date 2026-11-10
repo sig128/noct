@@ -258,7 +258,8 @@ function PrivateSection() {
           <Icon name="shield" size={16} />
           <span>
             Before you unlock: your wallet signs one fixed message, and your private keys are derived from that signature in this tab only. NOCT never stores or sends them.
-            To recover on another device, connect the same wallet and unlock again; the balance is rebuilt from the chain. Never sign this message on another site: whoever has the signature can see your private balance.
+            Wallets that won't sign Privacy Rings' standard message, such as Phantom, sign NOCT's own unlock text instead. To recover on another device, connect the same wallet and unlock
+            again; the balance is rebuilt from the chain. Never sign this message on another site: whoever has the signature can see your private balance.
           </span>
         </div>
         <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "var(--fs-small)", color: "var(--text-2)", marginBottom: 12 }}>
@@ -306,6 +307,15 @@ function PrivateSection() {
           </button>
         </span>
       </div>
+      {priv.method === "noct" ? (
+        <div className="note" style={{ marginBottom: 12 }}>
+          <Icon name="info" size={16} />
+          <span>
+            Unlocked with NOCT's own unlock text, because this wallet won't sign Privacy Rings' standard message. This balance opens in apps that use the same text, such as NOCT; other Privacy
+            Rings apps derive different keys and won't see it.
+          </span>
+        </div>
+      ) : null}
       {priv.balances.length === 0 ? (
         <p className={styles.meta}>No private balance yet. Deposit from your public wallet below.</p>
       ) : (

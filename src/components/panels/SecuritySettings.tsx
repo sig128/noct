@@ -96,7 +96,10 @@ function RecoveryFlow() {
       <ol className={styles.steps}>
         <li>Your private keys are derived from your wallet's signature of one fixed message. There is no separate recovery phrase to lose.</li>
         <li>On a new device, connect the same wallet and unlock. The balance and history are rebuilt from the chain through the indexer.</li>
-        <li>If NOCT is unavailable, any client built on the Privacy Rings SDK can derive the same keys from the same wallet and withdraw.</li>
+        <li>
+          With a wallet that signs Privacy Rings' standard message, any client built on the Privacy Rings SDK can derive the same keys and withdraw if NOCT is unavailable. Wallets that
+          refuse it, such as Phantom, sign NOCT's own unlock text instead; that balance opens only in apps that use the same text, which NOCT publishes with its code.
+        </li>
         <li>If you lose your wallet's keys, the private balance is lost with them, as with the wallet itself.</li>
       </ol>
       <div className="note note-warn" style={{ marginTop: 12 }}>

@@ -13,6 +13,7 @@
  */
 
 import type { Network } from "@/lib/operations/intent";
+import { keysFromNoctSignature, noctUnlockMessage, type UnlockMethod } from "./unlock";
 
 export interface PrivateBalance {
   mint: string;
@@ -40,6 +41,8 @@ export interface ExpectedIntent {
 export interface PrivacySession {
   readonly owner: string;
   readonly network: Network;
+  /** Which message the wallet signed to derive the keys (see unlock.ts). */
+  readonly method: UnlockMethod;
   sync(): Promise<void>;
   balances(): PrivateBalance[];
   history(): PrivateHistoryRow[];
@@ -89,6 +92,8 @@ export interface OpenSessionInput {
   origin: string;
   owner: string;
   ownerPublicKey: Uint8Array;
+  /** Privacy Rings' standard derivation message, or NOCT's text for wallets that refuse it. */
+  method: UnlockMethod;
   /** Signs the exact bytes given and returns the 64-byte signature. */
   signDerivationMessage(message: Uint8Array): Promise<Uint8Array>;
 }
@@ -120,11 +125,15 @@ export async function openPrivacySession(input: OpenSessionInput): Promise<Priva
   });
 
   if (input.ownerPublicKey.length !== 32) throw new PrivacyError("bad_key", "Wallet public key must be 32 bytes.");
-  const message = sprKeypair.ed25519DerivationMessage(input.ownerPublicKey as Parameters<typeof sprKeypair.ed25519DerivationMessage>[0]);
+  const message =
+    input.method === "standard" ? sprKeypair.ed25519DerivationMessage(input.ownerPublicKey as Parameters<typeof sprKeypair.ed25519DerivationMessage>[0]) : noctUnlockMessage(input.owner);
   const seed = await input.signDerivationMessage(message);
   let keys: ReturnType<typeof spr.LocalKeys.fromDerivationSeed>;
   try {
-    keys = spr.LocalKeys.fromDerivationSeed({ solanaPublicKey: kit.address(input.owner), derivationSeed: seed }, client.proofService);
+    keys =
+      input.method === "standard"
+        ? spr.LocalKeys.fromDerivationSeed({ solanaPublicKey: kit.address(input.owner), derivationSeed: seed }, client.proofService)
+        : await keysFromNoctSignature({ owner: input.owner, ownerPublicKey: input.ownerPublicKey, signature: seed, proofs: client.proofService });
   } catch (error) {
     throw new PrivacyError("derivation_rejected", `The wallet's signature did not derive privacy keys (${(error as Error).message}).`);
   } finally {
@@ -156,6 +165,7 @@ export async function openPrivacySession(input: OpenSessionInput): Promise<Priva
   const session: PrivacySession = {
     owner: input.owner,
     network: input.network,
+    method: input.method,
     async sync() {
       guard();
       try {
