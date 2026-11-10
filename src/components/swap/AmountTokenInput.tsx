@@ -108,7 +108,7 @@ export function AmountOutput(props: Common & { amount: bigint | null; loading: b
         </span>
         {props.balance && props.token ? (
           <span className={`${styles.balance} num`}>
-            Balance{" "}
+            {props.balance.label ?? "Balance"}{" "}
             <strong>
               <Sensitive>
                 {formatAmount(props.balance.amount, props.token.decimals)} {props.token.symbol}

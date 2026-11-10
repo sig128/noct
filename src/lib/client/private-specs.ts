@@ -179,19 +179,19 @@ export function privateTransferSpec(c: Common & { recipient: string }): TxSpec {
 }
 
 /** Public withdrawal. When the user asked for a private transfer, the downgrade must be accepted explicitly. */
-export function withdrawalSpec(c: Common & { recipient: string; requestedPrivacy: PrivacyClass }): TxSpec {
+export function withdrawalSpec(c: Common & { recipient: string; requestedPrivacy: PrivacyClass; title?: string; notice?: string }): TxSpec {
   const amountText = `${formatAmount(c.amount, c.decimals)} ${c.symbol}`;
   const downgraded = c.requestedPrivacy !== "public";
   return {
     kind: "privateWithdrawal",
-    title: downgraded ? `Send ${c.symbol} as a public withdrawal` : `Withdraw ${c.symbol} to a public address`,
+    title: c.title ?? (downgraded ? `Send ${c.symbol} as a public withdrawal` : `Withdraw ${c.symbol} to a public address`),
     network: c.network,
     signer: c.signer,
     demo: c.demo,
     disclosure: PROFILES.privateWithdrawal,
     requestedPrivacy: c.requestedPrivacy,
     downgradeNotice: downgraded
-      ? "The recipient has no private address, so this becomes a public withdrawal: the token, amount and recipient will be visible on chain."
+      ? (c.notice ?? "The recipient has no private address, so this becomes a public withdrawal: the token, amount and recipient will be visible on chain.")
       : undefined,
     activityDetail: amountText,
     primaryLabel: c.demo ? "Simulate withdrawal" : "Sign and withdraw",

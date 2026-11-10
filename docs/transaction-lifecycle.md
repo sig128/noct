@@ -62,6 +62,10 @@ The full transition table is in `TRANSITIONS`; any other transition throws `Inva
 | Jupiter reports failure with a signature | Reconcile that signature before saying anything about funds |
 | Network change, demo-mode change or lock | Session invalidated; private views cleared; non-in-flight operations cancelled |
 
+## Guided sequences
+
+Some actions are a series of transactions, such as paying from the private balance (move out, swap, move back in). `src/lib/client/sequence.ts` runs them as separate operations: each step is a full `TxSpec` with its own review, checks, simulation and signature, and the next step starts only when the user presses "Continue" after the previous one confirmed. Each step is built from the amounts the previous step settled (for a swap, Jupiter's reported output, or the reviewed minimum if that is unknown); if a step cannot be built from known amounts it stops with a message instead of guessing. "Stop here" ends the series and says where the funds are.
+
 ## Where the guarantees stop
 
 - NOCT does not decode Jupiter's route instructions, so the minimum-output bound inside the transaction is taken from Jupiter's response and confirmed only indirectly by simulation.

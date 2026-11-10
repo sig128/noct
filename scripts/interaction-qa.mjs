@@ -369,6 +369,41 @@ await check("demo mode: clearly marked, no wallet calls, demo receipt", async (p
   assert(upstream.length === 0, `demo mode reached upstream routes: ${upstream.slice(0, 3).join(", ")}`);
 }, { settings: DEMO });
 
+await check("demo private-balance swap: three reviewed steps, consent first, balance back in private", async (page) => {
+  await page.goto(`${BASE}/balance`);
+  await settle(page);
+  await page.getByRole("button", { name: /Use demo wallet|Connect wallet/ }).first().click();
+  const dialog = page.getByRole("dialog");
+  if (await dialog.isVisible().catch(() => false)) await dialog.getByRole("button", { name: "Use demo wallet" }).click();
+  await page.getByRole("checkbox").first().check();
+  await page.getByRole("button", { name: /Unlock demo balance/ }).click();
+  await page.getByText(/Synced/).first().waitFor({ timeout: 6000 });
+  await page.locator('[data-rail="swap"]').click();
+  await page.waitForURL(BASE + "/");
+  await page.getByRole("button", { name: "Public wallet" }).click();
+  await page.getByRole("radio", { name: /Private balance/ }).click();
+  await typeAmount(page, "1");
+  await page.getByRole("button", { name: "Review private-balance swap" }).click({ timeout: 8000 });
+  const open = page.locator("dialog[open]");
+  await open.getByText(/step 1 of 3/).waitFor({ timeout: 6000 });
+  const simulateOut = open.getByRole("button", { name: /Simulate withdrawal|Confirm the privacy change/ });
+  assert((await simulateOut.isDisabled()), "step 1 can be signed without accepting the public flow");
+  await open.getByRole("checkbox").check();
+  await open.getByRole("button", { name: "Simulate withdrawal" }).click();
+  await open.getByRole("button", { name: /Continue: swap on Jupiter/ }).click({ timeout: 8000 });
+  await open.getByText(/step 2 of 3/).waitFor({ timeout: 6000 });
+  await open.getByRole("button", { name: "Simulate swap" }).click({ timeout: 8000 });
+  await open.getByRole("button", { name: /Continue: move USDC in/ }).click({ timeout: 8000 });
+  await open.getByText(/step 3 of 3/).waitFor({ timeout: 6000 });
+  await open.getByRole("button", { name: "Simulate deposit" }).click({ timeout: 8000 });
+  await open.getByText("Simulated", { exact: true }).waitFor({ timeout: 8000 });
+  await open.getByRole("button", { name: "Done" }).click();
+  await page.locator('[data-rail="balance"]').click();
+  await page.waitForURL(/\/balance$/);
+  const text = await page.locator("main").innerText();
+  assert(/USDC/.test(text) && /3 notes|4 notes|notes/.test(text), "private balance not shown after the flow");
+}, { settings: DEMO, wallet: false });
+
 // ---------------------------------------------------------------- privacy hygiene
 
 await check("storage hygiene: only settings persist; no address, amount or key material in storage, cookies or URL", async (page) => {

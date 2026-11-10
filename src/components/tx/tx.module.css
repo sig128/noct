@@ -11,6 +11,12 @@
   gap: 12px;
 }
 
+.seqLabel {
+  margin: 0 0 4px;
+  font-size: var(--fs-small);
+  color: var(--private);
+}
+
 .head h2 {
   margin: 0;
   font-size: var(--fs-title);

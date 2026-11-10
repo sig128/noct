@@ -1,12 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatAmount, formatUnits, formatUsd, parseDecimalRatio, parseUnits, valueOf } from "@/lib/decimal";
-import { useDefaultTokens, useMintFacts, useNow, usePrices, usePublicBalances, useEpoch, publicBalanceOf } from "@/lib/client/hooks";
+import { useCapabilities, useDefaultTokens, useMintFacts, useNow, usePrices, usePublicBalances, useEpoch, publicBalanceOf } from "@/lib/client/hooks";
 import { usePrivate, useSettings, useSwapDraft, useWallet } from "@/lib/client/stores";
 import { txFlow, useTxFlow } from "@/lib/client/tx-flow";
 import { swapSpec, rateText } from "@/lib/client/swap-spec";
-import { PROFILES, UNAVAILABLE, type PrivacyClass } from "@/lib/privacy/model";
+import { shieldSpec, withdrawalSpec } from "@/lib/client/private-specs";
+import { sequence } from "@/lib/client/sequence";
+import { HOLDING_BLOCKERS } from "@/lib/capabilities";
+import { PROFILES, type PrivacyClass } from "@/lib/privacy/model";
 import { isQuoteStale, networkCostLamports, QUOTE_TTL_MS } from "@/lib/swap/quote";
 import { maxSpendable, presetAmount, TOKEN_ACCOUNT_RENT_LAMPORTS } from "@/lib/swap/max";
 import { activeTransferFee, extensionRestrictions } from "@/lib/tokens/mint-account";
@@ -34,7 +38,10 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
   const slippage = useSettings((s) => s.slippageBps);
   const address = useWallet((s) => s.address);
   const privateStatus = usePrivate((s) => s.status);
+  const privateBalances = usePrivate((s) => s.balances);
   const flowOpen = useTxFlow((s) => s.open);
+  const router = useRouter();
+  const caps = useCapabilities();
   const [picker, setPicker] = useState<"pay" | "receive" | null>(null);
   const [modeOpen, setModeOpen] = useState(false);
   const [slipOpen, setSlipOpen] = useState(false);
@@ -98,24 +105,117 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
 
   const insufficient = amount !== null && inputBalance !== null && max !== null && amount > (input?.mint === NATIVE_SOL_MINT ? max.amount : inputBalance);
 
+  // ---- paying from the private balance ----------------------------------------
+  // Three separately signed steps: move out (public), swap on Jupiter (public),
+  // move back in (public deposit). Only the balance is private afterwards.
+  const privateMode = requestedPrivacy !== "public";
+  const privacyOn = demo || Boolean(caps.data?.privacy[network].enabled);
+  const privacyReason = demo ? null : (caps.data?.privacy[network].reason ?? "Checking this deployment's configuration.");
+  const privateOf = (mint: string | undefined) => (mint && privateStatus === "ready" ? (privateBalances.find((b) => b.mint === mint)?.amount ?? 0n) : null);
+  const privateInput = privateOf(input?.mint);
+  const privateOutput = privateOf(output?.mint);
+  const publicSol = address ? publicBalanceOf(balances.data, NATIVE_SOL_MINT) : null;
+  const outputHoldBlocked = outputFacts.data ? extensionRestrictions(outputFacts.data).some((r) => HOLDING_BLOCKERS.includes(r.code)) : false;
+  const MIN_FEE_LAMPORTS = 5_000_000n;
+
+  const startPrivateSwap = () => {
+    if (!input || !output || amount === null || !address) return;
+    const inSym = input.symbol;
+    const outSym = output.symbol;
+    const refetch = () => void balances.refetch();
+    void sequence.start(
+      `Swap ${inSym} for ${outSym} from your private balance`,
+      [
+        {
+          label: `move ${inSym} out`,
+          spec: () =>
+            withdrawalSpec({
+              network,
+              signer: address,
+              demo,
+              assetMint: input.mint,
+              symbol: inSym,
+              decimals: input.decimals,
+              amount,
+              token2022: input.tokenProgram === "token2022",
+              recipient: address,
+              requestedPrivacy: "confidential_transfer",
+              title: `Move ${inSym} out of your private balance`,
+              notice: `This swap runs in three steps you sign one by one: ${inSym} moves to your public wallet, Jupiter swaps it, and the ${outSym} moves back into your private balance. Each step shows on chain with its token and amount, and the three can be linked. Only your balance is hidden again afterwards.`,
+              onSettled: refetch,
+            }),
+        },
+        {
+          label: `swap on Jupiter`,
+          spec: () =>
+            swapSpec({
+              input,
+              output,
+              amount,
+              slippageBps: slippage,
+              network,
+              signer: address,
+              demo,
+              inputBalance: (inputBalance ?? 0n) + amount,
+              outputTransferFeeBps: outFee?.basisPoints ?? null,
+              onSettled: refetch,
+            }),
+        },
+        {
+          label: `move ${outSym} in`,
+          spec: (outputs) => {
+            const received = BigInt(outputs.received ?? outputs.minimum ?? "0");
+            if (received <= 0n) throw new Error(`The amount of ${outSym} received is not known yet. Check your wallet, then move it from Balance.`);
+            return shieldSpec({
+              network,
+              signer: address,
+              demo,
+              assetMint: output.mint,
+              symbol: outSym,
+              decimals: output.decimals,
+              amount: received,
+              token2022: output.tokenProgram === "token2022",
+              available: received,
+              onSettled: refetch,
+            });
+          },
+        },
+      ],
+      [
+        `the ${inSym} is in your public wallet. Swap it from there, or move it back into your private balance from Balance.`,
+        `the ${outSym} is in your public wallet. Move it into your private balance from Balance whenever you like.`,
+      ],
+    );
+  };
+
   // ---- primary action -------------------------------------------------------
-  let action: { label: string; disabled: boolean; busy?: boolean; onClick?: () => void; hint?: string };
-  if (requestedPrivacy !== "public") action = { label: "Private balance swaps are unavailable", disabled: true };
-  else if (!input || !output) action = { label: "Select a token", disabled: true };
+  type Action = { label: string; disabled: boolean; busy?: boolean; onClick?: () => void; hint?: string };
+  const quoteGate = (): Action | null => {
+    if (quoteState.status === "loading") return { label: "Getting a quote", disabled: true, busy: true };
+    if (quoteState.status === "no_route") return { label: "No route for this pair", disabled: true, hint: quoteState.error ?? undefined };
+    if (quoteState.status === "error") return { label: "Retry quote", disabled: false, onClick: quoteState.refresh, hint: quoteState.error ?? undefined };
+    if (!quote) return { label: "Getting a quote", disabled: true, busy: true };
+    if (stale) return { label: "Refresh quote", disabled: false, onClick: quoteState.refresh };
+    return null;
+  };
+  let action: Action;
+  if (!input || !output) action = { label: "Select a token", disabled: true };
   else if (input.mint === output.mint) action = { label: "Choose two different tokens", disabled: true };
   else if (!amountText || amount === null)
     action = { label: parsed && !parsed.ok && parsed.reason === "too_large" ? "Amount too large" : "Enter an amount", disabled: true };
   else if (quoteState.status === "wrong_network") action = { label: "Swaps need mainnet", disabled: true, hint: quoteState.error ?? undefined };
   else if (blocked) action = { label: "This token cannot be moved", disabled: true, hint: blocked.message };
   else if (!address) action = { label: demo ? "Use the demo wallet" : "Connect wallet to swap", disabled: false, onClick: () => useWallet.getState().set({ pickerOpen: true }) };
-  else if (insufficient) action = { label: `Insufficient ${input.symbol}`, disabled: true, hint: input.mint === NATIVE_SOL_MINT ? "Keeps SOL back for fees and account rent." : undefined };
-  else if (quoteState.status === "loading") action = { label: "Getting a quote", disabled: true, busy: true };
-  else if (quoteState.status === "no_route") action = { label: "No route for this pair", disabled: true, hint: quoteState.error ?? undefined };
-  else if (quoteState.status === "error") action = { label: "Retry quote", disabled: false, onClick: quoteState.refresh, hint: quoteState.error ?? undefined };
-  else if (!quote) action = { label: "Getting a quote", disabled: true, busy: true };
-  else if (stale) action = { label: "Refresh quote", disabled: false, onClick: quoteState.refresh };
+  else if (privateMode) {
+    if (!privacyOn) action = { label: "Private balance is off here", disabled: true, hint: privacyReason ?? undefined };
+    else if (privateStatus !== "ready") action = { label: "Unlock your private balance", disabled: false, onClick: () => router.push("/balance") };
+    else if (privateInput !== null && amount > privateInput) action = { label: `Not enough ${input.symbol} in your private balance`, disabled: true };
+    else if (outputHoldBlocked) action = { label: `${output.symbol} can't be held privately`, disabled: true, hint: "This token's Token-2022 settings block private holding." };
+    else if (!demo && publicSol !== null && publicSol < MIN_FEE_LAMPORTS) action = { label: "Add a little SOL for fees", disabled: true, hint: "Your public wallet pays the network fee for each of the three steps." };
+    else action = quoteGate() ?? { label: "Review private-balance swap", disabled: flowOpen, onClick: startPrivateSwap };
+  } else if (insufficient) action = { label: `Insufficient ${input.symbol}`, disabled: true, hint: input.mint === NATIVE_SOL_MINT ? "Keeps SOL back for fees and account rent." : undefined };
   else
-    action = {
+    action = quoteGate() ?? {
       label: "Review swap",
       disabled: flowOpen,
       onClick: () =>
@@ -135,11 +235,12 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
         ),
     };
 
+  const presetBase = privateMode ? privateInput : (max?.amount ?? null);
   const presets =
-    max && max.amount > 0n && input && address && requestedPrivacy === "public"
+    presetBase !== null && presetBase > 0n && input && address
       ? ([25, 50, 100] as const).map((p) => ({
           label: p === 100 ? "Max" : `${p}%`,
-          onClick: () => set({ amountText: formatUnits(presetAmount(max.amount, p), input.decimals) }),
+          onClick: () => set({ amountText: formatUnits(presetAmount(presetBase, p), input.decimals) }),
         }))
       : undefined;
 
@@ -212,9 +313,9 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
           onChange={(v) => set({ amountText: v })}
           onPickToken={() => setPicker("pay")}
           usdText={usd(amount, input, prices.data?.[input?.mint ?? ""]?.usdPrice)}
-          balance={inputBalance !== null ? { amount: inputBalance } : null}
+          balance={privateMode ? (privateInput !== null ? { amount: privateInput, label: "Private" } : null) : inputBalance !== null ? { amount: inputBalance } : null}
           presets={presets}
-          invalid={insufficient}
+          invalid={privateMode ? privateInput !== null && amount !== null && amount > privateInput : insufficient}
         />
         <button type="button" className={styles.reverse} aria-label="Reverse tokens" onClick={reverse}>
           <Icon name="reverse" size={18} />
@@ -227,7 +328,7 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
           onPickToken={() => setPicker("receive")}
           usdText={usd(quote?.outAmount ?? null, output, prices.data?.[output?.mint ?? ""]?.usdPrice)}
           status={quoteState.status === "no_route" ? "No executable route" : undefined}
-          balance={outputBalance !== null && outputBalance > 0n ? { amount: outputBalance } : null}
+          balance={privateMode ? (privateOutput !== null && privateOutput > 0n ? { amount: privateOutput, label: "Private" } : null) : outputBalance !== null && outputBalance > 0n ? { amount: outputBalance } : null}
         />
       </div>
 
@@ -248,14 +349,11 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
         </div>
       ))}
 
-      {requestedPrivacy !== "public" ? (
+      {privateMode ? (
         <div className="note note-private">
           <Icon name="rosette" size={16} />
           <span>
-            {UNAVAILABLE.privateSwap} You can swap from your public wallet, or withdraw from your private balance first (a public withdrawal).{" "}
-            <button type="button" className="link" style={{ background: "none", border: 0, padding: 0, color: "inherit", font: "inherit" }} onClick={() => set({ requestedPrivacy: "public" })}>
-              Swap from public wallet instead
-            </button>
+            Pays from your private balance in three steps you sign one by one: {input?.symbol ?? "the token"} moves out, Jupiter swaps it, and {output?.symbol ?? "what you buy"} moves back in. Each step is public and the three can be linked; your balance is hidden again afterwards.
           </span>
         </div>
       ) : null}
@@ -283,7 +381,10 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
         </>
       ) : null}
 
-      <DisclosurePreview profile={PROFILES.publicSwap} detail=" Your wallet address, both tokens and both amounts are visible on chain." />
+      <DisclosurePreview
+        profile={PROFILES.publicSwap}
+        detail={privateMode ? " The move out, the swap and the move back in each show your address, the token and the amount." : " Your wallet address, both tokens and both amounts are visible on chain."}
+      />
 
       <div className={styles.primaryWrap}>
         <button
@@ -343,7 +444,7 @@ function ModePopover({ value, onChange, onClose, privateStatus }: { value: Priva
     {
       value: "confidential_transfer",
       label: "Private balance",
-      desc: `Not available. ${UNAVAILABLE.privateSwap}${privateStatus === "ready" ? "" : " Your private balance is also locked."}`,
+      desc: `Pays from your private balance and puts what you buy back into it, in three signed steps. The trade itself is public.${privateStatus === "ready" ? "" : " Unlock your private balance first."}`,
     },
   ];
   return (

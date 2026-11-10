@@ -10,7 +10,7 @@ NOCT states, per operation, exactly what becomes public. A public Jupiter swap i
 
 | Area | What it does | Backed by |
 | --- | --- | --- |
-| Swap | Quotes, review, wallet signature, landing, reconciliation | Jupiter Swap API v2 (`/order`, `/execute`) |
+| Swap | Quotes, review, wallet signature, landing, reconciliation; can pay from the private balance in three signed steps (public trade) and move what was bought back into it | Jupiter Swap API v2 (`/order`, `/execute`), Privacy Rings |
 | Token discovery | Search by name, ticker or exact mint; impostor and risk flags; Token-2022 extension checks | Jupiter Tokens v2, on-chain mint accounts |
 | Balance | One ledger across public wallet, private balance, supplied, collateral and debt, with no double counting | Solana RPC, Privacy Rings SDK, Jupiter Lend |
 | Send and receive | Private transfers (amounts hidden, addresses visible), public withdrawals, receive address | `@heliuslabs/spr` 0.9.0-alpha (Default Ring) |

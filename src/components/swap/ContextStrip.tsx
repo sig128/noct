@@ -28,7 +28,7 @@ export function ContextStrip() {
       <div className={styles.cell}>
         <span className={styles.cellLabel}>Privacy</span>
         <span className={styles.cellValue} style={{ color: requested === "public" ? undefined : "var(--private)" }} title={privateStatus === "ready" ? "Swaps execute publicly. Your private balance is open in this tab." : undefined}>
-          {requested === "public" ? "Public execution" : "Private swap unavailable"}
+          {requested === "public" ? "Public execution" : "Public trade"}
         </span>
       </div>
     </div>

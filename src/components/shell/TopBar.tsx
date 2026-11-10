@@ -7,6 +7,7 @@ import { solanaRpc } from "@/lib/client/rpc";
 import { shortAddress } from "@/lib/tokens/sanitize";
 import { disconnect } from "@/lib/client/session";
 import { Icon } from "@/components/ui/Icon";
+import { MoonMark } from "@/components/ui/MoonMark";
 import { CopyButton } from "@/components/ui/primitives";
 import styles from "./shell.module.css";
 
@@ -54,7 +55,8 @@ export function TopBar() {
       {demo ? <div className={styles.demoEdge} aria-hidden="true" /> : null}
       <div className={styles.brand}>
         <Link href="/" className={styles.wordmark} aria-label="noct, swap">
-          noct
+          <MoonMark size={22} />
+          <span className={styles.wordmarkText}>noct</span>
         </Link>
         {demo ? (
           <span className={styles.demoPill} role="status">

@@ -34,7 +34,8 @@ export interface BuiltTx {
 }
 
 export type SubmitResult =
-  | { status: "confirmed"; signature: string; rows?: ReviewRow[] }
+  /** `outputs` carries settled amounts (base-unit integer strings) to a following step. */
+  | { status: "confirmed"; signature: string; rows?: ReviewRow[]; outputs?: Record<string, string> }
   | { status: "failed"; signature: string | null; message: string; retryable: boolean }
   | { status: "unknown"; signature: string | null; message: string };
 
@@ -76,6 +77,8 @@ export interface TxFlowState {
   note: string | null;
   signature: string | null;
   receipt: ReviewRow[] | null;
+  /** Settled amounts reported by the last confirmed submission. */
+  outputs: Record<string, string> | null;
   walletEpoch: number;
 }
 
@@ -94,6 +97,7 @@ const initial: Omit<TxFlowState, "walletEpoch"> = {
   note: null,
   signature: null,
   receipt: null,
+  outputs: null,
 };
 
 export const useTxFlow = create<TxFlowState>()(() => ({ ...initial, walletEpoch: 0 }));
@@ -325,7 +329,7 @@ export const txFlow = {
     if (result.status === "confirmed") {
       move("confirming");
       move("completed", "Confirmed");
-      set({ receipt: result.rows ?? null, error: null });
+      set({ receipt: result.rows ?? null, outputs: result.outputs ?? null, error: null });
       reservations.release(operationId);
       spec.onSettled?.();
       return;

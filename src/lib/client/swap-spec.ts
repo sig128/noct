@@ -117,10 +117,12 @@ export function swapSpec(p: SwapSpecInput): TxSpec {
     async submit(signed, built) {
       if (p.demo) {
         await new Promise((r) => setTimeout(r, 900));
+        const demoIntent = built.intent.kind === "swap" ? built.intent : null;
         return {
           status: "confirmed",
           signature: `demo-${built.intent.operationId.slice(0, 8)}`,
           rows: [{ label: "Result", value: "Simulated in Demo mode. No transaction was created or sent.", tone: "warn" }],
+          outputs: demoIntent ? { received: demoIntent.expectedOutput.toString(), minimum: demoIntent.minNetOutput.toString() } : undefined,
         };
       }
       let response;
@@ -145,7 +147,9 @@ export function swapSpec(p: SwapSpecInput): TxSpec {
           { label: "Network fee", value: fee === null ? "Not yet indexed" : lamportsText(fee) },
           { label: "Privacy", value: PROFILES.publicSwap.summary },
         ];
-        return { status: "confirmed", signature: r.signature, rows };
+        const received = r.outputAmountResult ?? r.totalOutputAmount;
+        const minimum = built.intent.kind === "swap" ? built.intent.minNetOutput.toString() : undefined;
+        return { status: "confirmed", signature: r.signature, rows, outputs: { ...(received ? { received } : {}), ...(minimum ? { minimum } : {}) } };
       }
       const message = executeErrorMessage(r.code, r.error);
       // -1..-3: refused before broadcast. Anything else: it may have been broadcast.

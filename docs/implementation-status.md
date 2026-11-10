@@ -23,6 +23,7 @@ Evidence: `npm run typecheck` (strict), 120 Vitest tests in 10 files, a producti
 | Credit math | Jupiter Lend vault capacity, LTV, health, liquidation price, oracle staleness and deviation gates; risk-reducing actions always allowed |
 | Shell and navigation | Rail order and names, keyboard and pointer previews (to the left, delayed, hoverable), Escape and focus return, previews never covering an edited amount, deep links, back/forward, swap draft kept across modules, 404 for unknown modules, mobile bottom bar and More sheet with 44 px targets, tablet tap without hover, modal focus trap, reduced motion |
 | Demo mode | Clearly marked; no wallet calls; no swap, RPC or privacy requests, including before settings load |
+| Paying from the private balance (demo) | Three reviewed steps (move out, swap, move back in), consent required before the first, settled amounts passed forward, stop notes; unit tests and a browser check in demo mode |
 | Hygiene | Only `noct.settings.v1` in storage; no address, amount or key material in storage, cookies or URL; masking hides balances in the card, panel and previews; CSP and framing headers; `no-store` on APIs; cross-origin writes refused |
 | Server | Log redaction, URL key redaction, metadata mapping, request guards (including the prover's octet-stream bodies), empty env values treated as unset |
 
@@ -36,6 +37,7 @@ These paths exist end to end in code, compile into the production bundle and use
 | Live token search, prices, mint reads | The sandbox used fixtures | Search a few memecoins by name and mint; check Token-2022 fee display on a fee-bearing mint |
 | Jupiter Lend supply, withdraw and borrow | Beta API; no funds | Supply and withdraw a small amount; open, repay and close a minimal position |
 | Privacy Rings: unlock, sync, balances, history, registration, deposit, private transfer, public withdrawal | No `HELIUS_API_KEY` in this environment; services never contacted | Devnet first: unlock, register, deposit devnet SOL, transfer between two wallets, withdraw |
+| Swaps paid from the private balance (live) | Depends on the Privacy Rings path above plus a live Jupiter swap | A small three-step run on mainnet after the private balance works |
 | Wallet compatibility | Tested only with an injected QA wallet | Phantom, Solflare, Backpack and a hardware wallet; v1 transaction support for private operations |
 | Program upgrade-authority report | Fixture RPC has no program accounts, so Settings shows "Not deployed on this network" there | Read against mainnet RPC |
 | Pyth independent check | Needs `PYTH_API_KEY` | Compare with the vault oracle on a live market |

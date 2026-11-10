@@ -2,9 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useNow, useEarnMarkets } from "@/lib/client/hooks";
+import { useCapabilities, useEarnMarkets, useMintFacts, useNow } from "@/lib/client/hooks";
 import { txFlow, useTxFlow, type ReviewRow } from "@/lib/client/tx-flow";
-import { useHandoff } from "@/lib/client/stores";
+import { useHandoff, usePrivate, useSettings } from "@/lib/client/stores";
+import { sequence, useSequence } from "@/lib/client/sequence";
+import { shieldSpec } from "@/lib/client/private-specs";
+import { extensionRestrictions } from "@/lib/tokens/mint-account";
+import { HOLDING_BLOCKERS } from "@/lib/capabilities";
+import { formatAmount } from "@/lib/decimal";
 import type { Phase } from "@/lib/operations/state-machine";
 import { programLabel } from "@/lib/tx/programs";
 import { Dialog, ExplorerLinks, Row, Sensitive } from "@/components/ui/primitives";
@@ -54,7 +59,14 @@ export function TxDialog() {
   const router = useRouter();
   const [sheet, setSheet] = useState(false);
   const earn = useEarnMarkets();
+  const seq = useSequence();
+  const privateStatus = usePrivate((p) => p.status);
+  const demoMode = useSettings((st) => st.demoMode);
+  const network = useSettings((st) => st.network);
+  const caps = useCapabilities();
   const spec = s.spec;
+  const swapIntent = s.built?.intent.kind === "swap" ? s.built.intent : null;
+  const outFacts = useMintFacts(swapIntent?.outputMint);
   const idx = stepIndex(s.phase);
   const failed = s.phase === "retryableFailure";
   const can = txFlow.canApprove();
@@ -73,16 +85,55 @@ export function TxDialog() {
   const swappedInto = spec.kind === "swap" && s.built?.intent.kind === "swap" ? s.built.intent.outputMint : null;
   const earnable = swappedInto && (earn.data?.markets ?? []).some((m) => m.assetAddress === swappedInto);
 
+  // Guided series (for example paying from the private balance): show the step and offer the next one.
+  const inSequence = Boolean(seq.title);
+  const nextStep = inSequence ? (seq.steps[seq.index + 1] ?? null) : null;
+  const stopNote = inSequence ? (seq.stopNotes[seq.index] ?? null) : null;
+  const closeAll = () => {
+    sequence.stop();
+    txFlow.close();
+  };
+
+  // After an ordinary swap, offer to move what was bought into the private balance.
+  const privacyOn = demoMode || Boolean(caps.data?.privacy[network].enabled);
+  const holdBlocked = outFacts.data ? extensionRestrictions(outFacts.data).some((r) => HOLDING_BLOCKERS.includes(r.code)) : false;
+  const receivedText = s.outputs?.received ?? s.outputs?.minimum ?? null;
+  const canShield = !inSequence && swapIntent !== null && privacyOn && privateStatus === "ready" && !holdBlocked && receivedText !== null && BigInt(receivedText) > 0n;
+  const shieldReceived = () => {
+    if (!swapIntent || !receivedText || !spec) return;
+    const amount = BigInt(receivedText);
+    const symbol = s.built?.rows.find((r) => r.label === "You receive (estimated)")?.value.split(" ").pop() ?? "tokens";
+    txFlow.close();
+    void txFlow.start(
+      shieldSpec({
+        network: spec.network,
+        signer: spec.signer,
+        demo: spec.demo,
+        assetMint: swapIntent.outputMint,
+        symbol,
+        decimals: swapIntent.outputDecimals,
+        amount,
+        token2022: outFacts.data?.program === "token2022",
+        available: amount,
+      }),
+    );
+  };
+
   return (
     <>
-      <Dialog open={s.open} onClose={() => txFlow.close()} labelledBy="tx-title" size="md" dismissible={!inFlight || true}>
+      <Dialog open={s.open} onClose={closeAll} labelledBy="tx-title" size="md" dismissible={!inFlight || true}>
         <div className={styles.wrap}>
           <div className={styles.head}>
             <div>
+              {inSequence ? (
+                <p className={styles.seqLabel}>
+                  {seq.title}: step {seq.index + 1} of {seq.steps.length}
+                </p>
+              ) : null}
               <h2 id="tx-title">{spec.title}</h2>
               {spec.demo ? <span className="chip chip-warn" style={{ marginTop: 8 }}>Demo: nothing will be signed or sent</span> : null}
             </div>
-            <button type="button" className="icon-btn" aria-label={inFlight ? "Hide; tracking continues" : "Close"} onClick={() => txFlow.close()}>
+            <button type="button" className="icon-btn" aria-label={inFlight ? "Hide; tracking continues" : "Close"} onClick={closeAll}>
               <Icon name="close" size={18} />
             </button>
           </div>
@@ -161,6 +212,12 @@ export function TxDialog() {
               <span>{s.error}</span>
             </div>
           ) : null}
+          {s.phase === "completed" && nextStep && stopNote ? (
+            <div className="note" role="note">
+              <Icon name="info" size={16} />
+              <span>If you stop here: {stopNote}</span>
+            </div>
+          ) : null}
           {s.note ? (
             <div className={`note ${s.phase === "pendingRecovery" ? "note-warn" : ""}`} role="status">
               <Icon name="info" size={16} />
@@ -175,7 +232,25 @@ export function TxDialog() {
             </p>
           ) : null}
           <div className={styles.actions}>
-            {s.phase === "completed" ? (
+            {s.phase === "completed" && nextStep ? (
+              <>
+                <button type="button" className="btn" onClick={closeAll}>
+                  Stop here
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => void sequence.advance()}>
+                  Continue: {nextStep.label}
+                </button>
+              </>
+            ) : s.phase === "completed" && canShield ? (
+              <>
+                <button type="button" className="btn" onClick={closeAll}>
+                  Done
+                </button>
+                <button type="button" className="btn btn-primary" onClick={shieldReceived}>
+                  Move {formatAmount(BigInt(receivedText!), swapIntent!.outputDecimals)} to private balance
+                </button>
+              </>
+            ) : s.phase === "completed" ? (
               <>
                 {earnable ? (
                   <button
@@ -190,7 +265,7 @@ export function TxDialog() {
                     Open Earn
                   </button>
                 ) : null}
-                <button type="button" className="btn btn-primary" onClick={() => txFlow.close()}>
+                <button type="button" className="btn btn-primary" onClick={closeAll}>
                   Done
                 </button>
               </>

@@ -218,3 +218,87 @@ describe("transaction coordinator", () => {
     expect(useTxFlow.getState().error).toMatch(/Another operation/);
   });
 });
+
+describe("guided sequences (paying from the private balance)", () => {
+  const demoStep = (title: string, outputs: Record<string, string> | undefined, privacy: "public" | "confidential_transfer" = "public", notice?: string): TxSpec => ({
+    kind: "swap",
+    title,
+    network: "mainnet",
+    signer: "DemoSigner11111111111111111111111111111111",
+    demo: true,
+    disclosure: PROFILES.publicSwap,
+    requestedPrivacy: privacy,
+    downgradeNotice: notice,
+    activityDetail: title,
+    primaryLabel: "Simulate",
+    async build({ operationId }): Promise<BuiltTx> {
+      return { wire: new Uint8Array(), lastValidBlockHeight: null, intent: intentFor("DemoSigner11111111111111111111111111111111", operationId), rows: [], expiresAt: Date.now() + 20_000 };
+    },
+    submit: async () => ({ status: "confirmed", signature: `demo-${title}`, outputs }),
+  });
+
+  it("runs each step only after the previous one confirmed, passing settled amounts forward", async () => {
+    const { sequence, useSequence } = await import("@/lib/client/sequence");
+    const seen: Record<string, string>[] = [];
+    await sequence.start("Private-balance swap", [
+      { label: "move out", spec: () => demoStep("out", undefined, "confidential_transfer", "This runs in three public steps.") },
+      { label: "swap", spec: () => demoStep("swap", { received: "4200", minimum: "4100" }) },
+      {
+        label: "move in",
+        spec: (o) => {
+          seen.push({ ...o });
+          return demoStep(`in-${o.received}`, undefined);
+        },
+      },
+    ]);
+    // Step 1 needs the explicit consent to a public flow.
+    expect(useTxFlow.getState().phase).toBe("awaitingApproval");
+    expect(txFlow.canApprove().ok).toBe(false);
+    txFlow.setDowngradeAccepted(true);
+    await txFlow.approve();
+    expect(useTxFlow.getState().phase).toBe("completed");
+    expect(sequence.next()?.label).toBe("swap");
+
+    await sequence.advance();
+    expect(useSequence.getState().index).toBe(1);
+    await txFlow.approve();
+    expect(useTxFlow.getState().outputs).toEqual({ received: "4200", minimum: "4100" });
+
+    await sequence.advance();
+    expect(seen).toEqual([{ received: "4200", minimum: "4100" }]);
+    expect(useTxFlow.getState().spec?.title).toBe("in-4200");
+    expect(sequence.next()).toBeNull();
+    sequence.stop();
+    expect(useSequence.getState().title).toBeNull();
+  });
+
+  it("does not advance before the current step completes", async () => {
+    const { sequence, useSequence } = await import("@/lib/client/sequence");
+    await sequence.start("Two steps", [
+      { label: "a", spec: () => demoStep("a", undefined) },
+      { label: "b", spec: () => demoStep("b", undefined) },
+    ]);
+    await sequence.advance();
+    expect(useSequence.getState().index).toBe(0);
+    expect(useTxFlow.getState().spec?.title).toBe("a");
+    sequence.stop();
+  });
+
+  it("stops with a message instead of guessing when a step cannot be built", async () => {
+    const { sequence, useSequence } = await import("@/lib/client/sequence");
+    await sequence.start("Broken", [
+      { label: "a", spec: () => demoStep("a", undefined) },
+      {
+        label: "b",
+        spec: () => {
+          throw new Error("The amount received is not known yet.");
+        },
+      },
+    ]);
+    await txFlow.approve();
+    await sequence.advance();
+    expect(useSequence.getState().index).toBe(0);
+    expect(useTxFlow.getState().error).toMatch(/not known/);
+    sequence.stop();
+  });
+});

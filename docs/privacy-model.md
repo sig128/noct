@@ -21,6 +21,7 @@ Classes are ordered by strength (E weakest, D strongest). A weaker result than r
 | Operation | Class | Sender | Recipient | Token | Amount | Public leg | Can read hidden parts |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Public swap (Jupiter) | E | public | public | public | public | none | n/a: anyone reading the ledger |
+| Swap paid from the private balance (three signed steps: move out, Jupiter swap, move back in) | E, each step | public | public | public | public | the move out and the move back in | n/a: the three steps can be linked; only the balance afterwards is hidden |
 | Deposit into private balance | E | public | public | public | public | the deposit itself | You, for the resulting private balance |
 | Private transfer (Default Ring) | A | public | public | **hidden** | **hidden** | none | You, the recipient, anyone holding your derivation signature |
 | Withdrawal to a public address | E | public | public | public | public | the withdrawal itself | n/a |
@@ -45,7 +46,7 @@ Your IP address reaches NOCT's server; upstream providers see the server's addre
 ## Rules the code enforces
 
 1. **No silent downgrade.** `resolvePrivacyMode` never returns a weaker profile without flagging it, and `assertNoSilentDowngrade` runs immediately before signing. If the prepared operation is weaker than requested, signing is refused unless the user ticked an explicit consent that names what becomes public. Example: a private transfer to an unregistered recipient fails with `WALLET_RECIPIENT_NOT_REGISTERED`; NOCT offers "Review a public withdrawal instead", and that review shows "The recipient has no private address, so this becomes a public withdrawal: the token, amount and recipient will be visible on chain" with a required checkbox.
-2. **Unavailable is shown as unavailable.** Choosing "Private balance" as a swap source disables the swap button and explains why, with a one-click way back to a public swap. Nothing is simulated as private.
+2. **Unavailable is shown as unavailable.** A swap whose trade is hidden does not exist on mainnet, so choosing "Private balance" as a swap source runs a guided three-step flow instead: a public move out of the private balance, a public Jupiter swap, and a public deposit back. The card says so before review, and the first step cannot be signed until the user ticks a consent that names what becomes visible. Nothing is presented as a private trade.
 3. **Disclosure before signature.** Every review shows a sender, recipient, token and amount grid with visible/hidden states and a "What is visible" sheet listing the profile's metadata exposure, custody and dependencies.
 4. **Previews and masking respect privacy.** Hovering the rail never reveals balances that are masked or locked. "Hide amounts" replaces amounts everywhere, including previews, with a security tint.
 5. **Per-token capability flags.** A public route, private holding, private entry/exit, Earn market and collateral eligibility are separate answers. A Token-2022 mint with a transfer hook, permanent delegate, non-transferable flag, pausable flag or default-frozen state is not offered for private holding.

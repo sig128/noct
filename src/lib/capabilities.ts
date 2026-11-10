@@ -23,7 +23,7 @@ export interface CapabilityInput {
   debtMints: ReadonlySet<string>;
 }
 
-const HOLDING_BLOCKERS: Restriction["code"][] = ["non_transferable", "permanent_delegate", "transfer_hook", "pausable", "default_frozen"];
+export const HOLDING_BLOCKERS: Restriction["code"][] = ["non_transferable", "permanent_delegate", "transfer_hook", "pausable", "default_frozen"];
 
 /**
  * Per-token, per-action capability flags. Each answer is independent: a
