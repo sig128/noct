@@ -1,0 +1,59 @@
+.picker {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.head h2 {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 580;
+}
+
+.lead {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.walletRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--field);
+  color: var(--text);
+  text-align: left;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.walletRow:hover:not(:disabled) {
+  background: var(--field-hover);
+}
+
+.walletRow img {
+  border-radius: 8px;
+}
+
+.walletName {
+  flex: 1;
+  font-weight: 540;
+}
