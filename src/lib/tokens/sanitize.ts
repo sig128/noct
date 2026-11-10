@@ -38,7 +38,6 @@ export const DEFAULT_ICON_HOSTS = [
   "raw.githubusercontent.com",
   "arweave.net",
   "www.arweave.net",
-  "ipfs.io",
   "gateway.irys.xyz",
   "static.jup.ag",
   "img-v1.raydium.io",
@@ -48,10 +47,6 @@ export const DEFAULT_ICON_HOSTS = [
   "assets.coingecko.com",
   "coin-images.coingecko.com",
   "shdw-drive.genesysgo.net",
-  "bafkreih.ipfs.nftstorage.link",
-  "cf-ipfs.com",
-  "ipfs.dweb.link",
-  "nftstorage.link",
 ];
 
 export function isAllowedIconUrl(raw: unknown, hosts: readonly string[] = DEFAULT_ICON_HOSTS): URL | null {
@@ -68,13 +63,13 @@ export function isAllowedIconUrl(raw: unknown, hosts: readonly string[] = DEFAUL
   return allowed ? url : null;
 }
 
-/** Public IPFS gateways tried, in order, after the one the metadata names. */
-const IPFS_GATEWAYS = ["https://ipfs.io/ipfs/", "https://dweb.link/ipfs/", "https://w3s.link/ipfs/"];
+/** Where an ipfs:// link is pointed. Public gateways like this one rate-limit servers, so see ipfsGatewayUrl. */
+const IPFS_IO = "https://ipfs.io/ipfs/";
 /** CIDv0 (base58, "Qm…") or CIDv1 in base32 ("baf…"), the forms gateways use. */
 const CID = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{50,})$/;
 
-function ipfsUrl(gateway: string, cid: string, path: string): URL {
-  return new URL(`${gateway}${cid}${path && path !== "/" ? path : ""}`);
+function contentPath(cid: string, path: string): string {
+  return `${cid}${path && path !== "/" ? path : ""}`;
 }
 
 /** The IPFS content an https gateway URL points at, if it is one (subdomain or path form). */
@@ -86,43 +81,20 @@ export function ipfsContent(url: URL): { cid: string; path: string } | null {
   return null;
 }
 
-const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
-
 /**
- * The sha2-256 digest a raw-codec CIDv1 ("bafkrei…") commits to, or null for
- * any other kind of CID. Content fetched for such a CID is checked against it.
+ * The same IPFS content on the deployment's own gateway. `template` is either
+ * a prefix the content id is appended to ("https://gw.example/ipfs/") or a URL
+ * with "{cid}" where the id goes, for gateways that take a token in the query.
  */
-export function rawBlockDigest(cid: string): Uint8Array | null {
-  if (!cid.startsWith("b")) return null;
-  const out: number[] = [];
-  let bits = 0;
-  let value = 0;
-  for (const ch of cid.slice(1)) {
-    const i = BASE32.indexOf(ch);
-    if (i < 0) return null;
-    value = (value << 5) | i;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      out.push((value >>> bits) & 0xff);
-      value &= (1 << bits) - 1;
-    }
+export function ipfsGatewayUrl(template: string, content: { cid: string; path: string }): URL | null {
+  const id = contentPath(content.cid, content.path);
+  const text = template.includes("{cid}") ? template.replace("{cid}", id) : `${template}${id}`;
+  try {
+    const url = new URL(text);
+    return url.protocol === "https:" && !url.username && !url.password ? url : null;
+  } catch {
+    return null;
   }
-  // CIDv1, raw codec (0x55), sha2-256 multihash (0x12) of 32 bytes.
-  if (out.length !== 36 || out[0] !== 0x01 || out[1] !== 0x55 || out[2] !== 0x12 || out[3] !== 0x20) return null;
-  return Uint8Array.from(out.slice(4));
-}
-
-/**
- * Where an icon can be fetched from, best first: the URL itself, then, for
- * IPFS content, other public gateways (several that older token metadata
- * names no longer serve).
- */
-export function iconCandidates(url: URL): URL[] {
-  const ipfs = ipfsContent(url);
-  if (!ipfs) return [url];
-  const all = [url, ...IPFS_GATEWAYS.map((g) => ipfsUrl(g, ipfs.cid, ipfs.path))];
-  return all.filter((u, i) => all.findIndex((v) => v.toString() === u.toString()) === i);
 }
 
 /**
@@ -138,7 +110,7 @@ export function normalizeIconUrl(raw: unknown): URL | null {
     const rest = text.slice(7).replace(/^ipfs\//i, "");
     const slash = rest.indexOf("/");
     const cid = slash < 0 ? rest : rest.slice(0, slash);
-    return CID.test(cid) ? ipfsUrl(IPFS_GATEWAYS[0]!, cid, slash < 0 ? "" : rest.slice(slash)) : null;
+    return CID.test(cid) ? new URL(`${IPFS_IO}${contentPath(cid, slash < 0 ? "" : rest.slice(slash))}`) : null;
   }
   let url: URL;
   try {

@@ -4,12 +4,12 @@ As of 2026-11-10. Five categories, from strongest evidence to none. "Fixtures" m
 
 ## 1. Verified in this build
 
-Evidence: `npm run typecheck` (strict), 142 Vitest tests in 12 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
+Evidence: `npm run typecheck` (strict), 144 Vitest tests in 12 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
 
 | Area | What was verified |
 | --- | --- |
 | Amount math | Base-unit parsing and formatting up to 24 decimals and u64 max, no rounding up, input normalisation, floor/ceil helpers, exact rational prices, MAX that keeps SOL for fees and rent and solves for input-side Token-2022 fees |
-| Token safety | Metadata sanitising, icon proxy (public HTTPS hosts through an image service, Helius's image cache with the metadata's own URL spelling, IPFS icons tried on other public gateways, staggered attempts, redirects kept on the allowlist, raster only), impostor ticker detection (Cyrillic, digit, lowercase-l lookalikes), risk notes, mint-account parsing for SPL and Token-2022 extensions, transfer-fee epochs |
+| Token safety | Metadata sanitising, icon proxy (public HTTPS hosts through an image service, the operator's own IPFS gateway, Helius's image cache with the metadata's own URL spelling, staggered attempts, no direct requests to public IPFS gateways, redirects kept on the allowlist, raster only), impostor ticker detection (Cyrillic, digit, lowercase-l lookalikes), risk notes, mint-account parsing for SPL and Token-2022 extensions, transfer-fee epochs |
 | Quotes | Schema validation, staleness, latest-request-wins under races, results never shown for an earlier search or amount |
 | Intents | Digest binding of every material field; any change or expiry voids approval; assembled order re-checked against the intent |
 | Transaction checks | Decoding, version, fee payer, required signers and co-signers, program allowlist, garbage rejection (the order, execute, Earn and Borrow routes apply the same function; the routes themselves have no dedicated tests) |
@@ -37,6 +37,7 @@ These paths exist end to end in code, compile into the production bundle and use
 | --- | --- | --- |
 | Public swaps on mainnet | No real wallet or funds were used | A small swap with a hardware or test wallet; compare the review with the wallet's own preview |
 | Live token search, prices, mint reads | The sandbox used fixtures | Search a few memecoins by name and mint; check Token-2022 fee display on a fee-bearing mint |
+| Token icons with `NOCT_IPFS_GATEWAY` | No gateway was configured; the path is unit-tested only. Live checks on 2026-11-10: icons on Arweave, GitHub and Google Storage load; WIF loads from Helius's cache; IPFS icons Helius does not hold (Fartcoin, GOAT, USELESS) show initials | Set a gateway and open the token picker; watch `icon.miss` in the logs |
 | Jupiter Lend supply, withdraw and borrow | Beta API; no funds | Supply and withdraw a small amount; open, repay and close a minimal position |
 | Privacy Rings: unlock, sync, balances, history, registration, deposit, private transfer, public withdrawal | No `HELIUS_API_KEY` in this environment; only the deployed relay's signed policy endpoint was read | With a small amount: unlock, register, deposit a little SOL, transfer between two wallets, withdraw |
 | Swaps paid from the private balance (live) | Depends on the Privacy Rings path above plus a live Jupiter swap | A small three-step run on mainnet after the private balance works |

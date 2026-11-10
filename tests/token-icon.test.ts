@@ -1,29 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { createHash } from "node:crypto";
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const WEBP = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0, 0]);
 const SVG = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
-
-/** The raw-codec CIDv1 of some bytes, as IPFS writes it. */
-function rawCid(bytes: Uint8Array): string {
-  const all = Uint8Array.from([0x01, 0x55, 0x12, 0x20, ...createHash("sha256").update(bytes).digest()]);
-  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
-  let out = "b";
-  let bits = 0;
-  let value = 0;
-  for (const byte of all) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      bits -= 5;
-      out += alphabet[(value >>> bits) & 31];
-    }
-    value &= (1 << bits) - 1;
-  }
-  return bits > 0 ? out + alphabet[(value << (5 - bits)) & 31] : out;
-}
 
 type Handler = (url: URL, init?: RequestInit) => Response | Promise<Response>;
 
@@ -46,6 +26,7 @@ beforeEach(() => vi.stubEnv("NOCT_SILENT_LOGS", "1"));
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  vi.resetModules();
 });
 
 describe("token icon proxy", () => {
@@ -97,15 +78,20 @@ describe("token icon proxy", () => {
     expect(calls.every((c) => ["wsrv.nl", "cdn.helius-rpc.com"].includes(new URL(c).hostname))).toBe(true);
   });
 
-  it("tries another IPFS gateway when the one the metadata names fails", async () => {
+  it("takes IPFS icons from the deployment's own gateway when one is set, and never shows its URL to the image service", async () => {
+    vi.stubEnv("NOCT_IPFS_GATEWAY", "https://gw.example.com/ipfs/{cid}?token=abc");
     const cid = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
-    const { res, calls } = await getIcon(`https://${cid}.ipfs.nftstorage.link/`, (url) => {
-      const asked = url.searchParams.get("url") ?? "";
-      return url.hostname === "wsrv.nl" && asked.startsWith("https://ipfs.io/") ? new Response(WEBP, { status: 200 }) : new Response(null, { status: 404 });
-    });
+    const { res, calls } = await getIcon(`https://${cid}.ipfs.nftstorage.link/`, (url) => (url.hostname === "gw.example.com" ? new Response(PNG, { status: 200 }) : new Response(null, { status: 429 })));
     expect(res.status).toBe(200);
-    const asked = calls.filter((c) => new URL(c).hostname === "wsrv.nl").map((c) => new URL(c).searchParams.get("url"));
-    expect(asked).toEqual([`https://${cid}.ipfs.nftstorage.link/`, `https://ipfs.io/ipfs/${cid}`]);
+    expect(calls).toContain(`https://gw.example.com/ipfs/${cid}?token=abc`);
+    expect(calls.filter((c) => new URL(c).hostname === "wsrv.nl").some((c) => c.includes("gw.example.com"))).toBe(false);
+  });
+
+  it("without its own gateway, never sends IPFS requests to public gateways other than through the image service", async () => {
+    const cid = "QmQr3Fz4h1etNsF7oLGMRHiCzhB5y9a7GjyodnF7zLHK1g";
+    const { res, calls } = await getIcon(`https://ipfs.io/ipfs/${cid}`, () => new Response(null, { status: 429 }));
+    expect(res.status).toBe(404);
+    expect(calls.map((c) => new URL(c).hostname).sort()).toEqual(["cdn.helius-rpc.com", "wsrv.nl"]);
   });
 
   it("starts the next gateway while a slow one is still running, and stops the slow one once an icon arrives", async () => {
@@ -127,17 +113,6 @@ describe("token icon proxy", () => {
     expect(Date.now() - startedAt).toBeLessThan(3_000);
     expect(calls).toHaveLength(2);
     expect(stopped).toBe(true);
-  });
-
-  it("takes a single-block IPFS icon from the trustless gateway, only when it hashes to its content id", async () => {
-    const cid = rawCid(PNG);
-    const ok = await getIcon(`https://ipfs.io/ipfs/${cid}`, (url) => (url.hostname === "trustless-gateway.link" ? new Response(PNG, { status: 200 }) : new Response(null, { status: 429 })));
-    expect(ok.res.status).toBe(200);
-    expect(ok.res.headers.get("content-type")).toBe("image/png");
-    expect(ok.calls).toContain(`https://trustless-gateway.link/ipfs/${cid}?format=raw`);
-
-    const swapped = await getIcon(`https://ipfs.io/ipfs/${cid}`, (url) => (url.hostname === "trustless-gateway.link" ? new Response(WEBP, { status: 200 }) : new Response(null, { status: 429 })));
-    expect(swapped.res.status).toBe(404);
   });
 
   it("refuses unsafe sources before any request", async () => {

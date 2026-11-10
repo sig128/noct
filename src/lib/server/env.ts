@@ -17,6 +17,8 @@ const schema = z.object({
   PYTH_HERMES_BASE: url.default("https://pyth.dourolabs.app/hermes"),
   NOCT_ALLOWED_ORIGINS: z.string().optional(),
   NOCT_ICON_HOSTS: z.string().optional(),
+  /** The deployment's own IPFS gateway for token icons (see ipfsGatewayUrl). */
+  NOCT_IPFS_GATEWAY: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof schema>;

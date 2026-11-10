@@ -58,6 +58,7 @@ Names only; see [.env.example](.env.example) for descriptions. Secrets stay on t
 | `PYTH_API_KEY`, `PYTH_HERMES_BASE` | Optional: Pyth prices from Hermes instead of on-chain feeds | unset: on-chain feeds via the RPC |
 | `NOCT_ALLOWED_ORIGINS` | Extra origins allowed to call write endpoints | same origin only |
 | `NOCT_ICON_HOSTS` | Extra hosts the icon proxy may fetch directly when the image service is down | built-in allowlist |
+| `NOCT_IPFS_GATEWAY` | Your own IPFS gateway for token icons stored on IPFS: a prefix such as `https://gw.example/ipfs/`, or a URL with `{cid}` | unset: IPFS icons only from wsrv.nl or Helius's image cache |
 | `NOCT_SILENT_LOGS` | `1` silences operational logs | logs on |
 | `NOCT_DIST_DIR` | Alternative build directory | `.next` |
 

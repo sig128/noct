@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { annotateIdentity, rankTokens, skeletonTicker } from "@/lib/tokens/identity";
 import { assessTokenRisk } from "@/lib/tokens/risk";
-import { iconCandidates, isAllowedIconUrl, normalizeIconUrl, proxiedIconUrl, rawBlockDigest, sanitizeName, sanitizeSymbol, sanitizeText } from "@/lib/tokens/sanitize";
-import { createHash } from "node:crypto";
+import { ipfsContent, ipfsGatewayUrl, isAllowedIconUrl, normalizeIconUrl, proxiedIconUrl, sanitizeName, sanitizeSymbol, sanitizeText } from "@/lib/tokens/sanitize";
 import { NATIVE_SOL_MINT, type TokenInfo } from "@/lib/tokens/types";
 
 const base: TokenInfo = {
@@ -65,26 +64,26 @@ describe("untrusted metadata", () => {
       expect(normalizeIconUrl(bad), bad).toBeNull();
     }
   });
-  it("reads the sha2-256 digest a raw-codec CID commits to, and nothing from other CIDs", () => {
-    // The CID of empty content.
-    expect(Buffer.from(rawBlockDigest("bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku")!).toString("hex")).toBe(createHash("sha256").update("").digest("hex"));
-    expect(rawBlockDigest("QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX")).toBeNull();
-    expect(rawBlockDigest("bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")).toBeNull();
-    expect(rawBlockDigest("bafkrei!!")).toBeNull();
-  });
-
-  it("tries IPFS icons on other public gateways after the one the metadata names", () => {
+  it("finds the IPFS content behind any gateway URL and places it on the deployment's own gateway", () => {
     const v1 = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
     const v0 = "QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX";
-    const sub = normalizeIconUrl(`https://${v1}.ipfs.nftstorage.link/`)!;
-    expect(sub.toString()).toBe(`https://${v1}.ipfs.nftstorage.link/`);
-    expect(iconCandidates(sub).map(String)).toEqual([`https://${v1}.ipfs.nftstorage.link/`, `https://ipfs.io/ipfs/${v1}`, `https://dweb.link/ipfs/${v1}`, `https://w3s.link/ipfs/${v1}`]);
-    const path = normalizeIconUrl(`https://ipfs.io/ipfs/${v0}/logo.png`)!;
-    expect(iconCandidates(path).map(String)).toEqual([`https://ipfs.io/ipfs/${v0}/logo.png`, `https://dweb.link/ipfs/${v0}/logo.png`, `https://w3s.link/ipfs/${v0}/logo.png`]);
+    const sub = ipfsContent(normalizeIconUrl(`https://${v1}.ipfs.nftstorage.link/`)!)!;
+    expect(sub).toEqual({ cid: v1, path: "/" });
+    const path = ipfsContent(normalizeIconUrl(`https://gateway.pinata.cloud/ipfs/${v0}/logo.png`)!)!;
+    expect(path).toEqual({ cid: v0, path: "/logo.png" });
+    expect(ipfsContent(new URL("https://cdn.example.org/ipfs/not-a-cid"))).toBeNull();
+    expect(ipfsGatewayUrl("https://gw.example.com/ipfs/", sub)?.toString()).toBe(`https://gw.example.com/ipfs/${v1}`);
+    expect(ipfsGatewayUrl("https://gw.example.com/ipfs/{cid}?token=abc", path)?.toString()).toBe(`https://gw.example.com/ipfs/${v0}/logo.png?token=abc`);
+    expect(ipfsGatewayUrl("http://gw.example.com/ipfs/", sub)).toBeNull();
+    expect(ipfsGatewayUrl("not a url", sub)).toBeNull();
     expect(normalizeIconUrl(`ipfs://${v0}`)?.toString()).toBe(`https://ipfs.io/ipfs/${v0}`);
     expect(normalizeIconUrl(`ipfs://ipfs/${v1}/a.png`)?.toString()).toBe(`https://ipfs.io/ipfs/${v1}/a.png`);
     expect(normalizeIconUrl("ipfs://not-a-cid")).toBeNull();
-    expect(iconCandidates(new URL("https://cdn.example.org/a.png")).map(String)).toEqual(["https://cdn.example.org/a.png"]);
+  });
+  it("never fetches public IPFS gateways directly, since they rate-limit servers", () => {
+    for (const host of ["ipfs.io", "dweb.link", "nftstorage.link", "cf-ipfs.com"]) {
+      expect(isAllowedIconUrl(`https://${host}/ipfs/QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX`), host).toBeNull();
+    }
   });
 });
 
