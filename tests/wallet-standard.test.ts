@@ -45,6 +45,15 @@ describe("wallet message signing", () => {
     expect((error as WalletActionError).message).toBe("Phantom could not sign the message. The wallet said: Messages that start with the off-chain prefix are not supported.");
   });
 
+  it("explains a wallet that reads the message as a transaction", async () => {
+    const wallet = option(async () => {
+      throw new Error("You cannot sign solana transactions using sign message");
+    });
+    const error = (await signExactMessage(wallet, account(), MESSAGE).catch((e: unknown) => e)) as WalletActionError;
+    expect(error.code).toBe("refused_format");
+    expect(error.message).toBe("Phantom won't sign this message because it reads it as a transaction. Privacy Rings accepts only a signature over this exact message, so Phantom can't unlock a private balance yet. Another wallet may be able to.");
+  });
+
   it("keeps a declined request a decline, and a signature over other bytes a refusal", async () => {
     const declined = await signExactMessage(
       option(async () => {

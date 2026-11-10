@@ -76,7 +76,7 @@ export function onWalletsChanged(cb: () => void): () => void {
 
 export class WalletActionError extends Error {
   constructor(
-    readonly code: "rejected" | "unsupported" | "no_account" | "failed" | "altered_message",
+    readonly code: "rejected" | "unsupported" | "no_account" | "failed" | "altered_message" | "refused_format",
     message: string,
   ) {
     super(message);
@@ -170,6 +170,13 @@ export async function signExactMessage(option: WalletOption, account: WalletAcco
   } catch (error) {
     if (error instanceof WalletActionError) throw error;
     if (isUserRejection(error)) throw new WalletActionError("rejected", "Signature declined in the wallet.");
+    // Phantom, for one, reads the off-chain message bytes as a transaction and refuses them.
+    if (/transaction/i.test(walletReason(error))) {
+      throw new WalletActionError(
+        "refused_format",
+        `${option.name} won't sign this message because it reads it as a transaction. Privacy Rings accepts only a signature over this exact message, so ${option.name} can't unlock a private balance yet. Another wallet may be able to.`,
+      );
+    }
     throw failure(`${option.name} could not sign the message.`, error);
   }
 }

@@ -4,7 +4,7 @@ As of 2026-11-10. Five categories, from strongest evidence to none. "Fixtures" m
 
 ## 1. Verified in this build
 
-Evidence: `npm run typecheck` (strict), 148 Vitest tests in 13 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
+Evidence: `npm run typecheck` (strict), 149 Vitest tests in 13 files, a production `next build`, 25 browser interaction checks (`npm run qa:interaction -- --slow`) and 38 screenshots at 1440, 1280, 768 and 390 px with no horizontal overflow and no console errors (`npm run qa:visual`), all against the production build backed by fixtures.
 
 | Area | What was verified |
 | --- | --- |
@@ -41,7 +41,7 @@ These paths exist end to end in code, compile into the production bundle and use
 | Jupiter Lend supply, withdraw and borrow | Beta API; no funds | Supply and withdraw a small amount; open, repay and close a minimal position |
 | Privacy Rings: unlock, sync, balances, history, registration, deposit, private transfer, public withdrawal | No `HELIUS_API_KEY` in this environment; only the deployed relay's signed policy endpoint was read | With a small amount: unlock, register, deposit a little SOL, transfer between two wallets, withdraw |
 | Swaps paid from the private balance (live) | Depends on the Privacy Rings path above plus a live Jupiter swap | A small three-step run on mainnet after the private balance works |
-| Wallet compatibility | Tested only with an injected QA wallet. The first live unlock (2026-11-10) failed at the derivation signature: the wallet would not sign the message. The Privacy Rings SDK requires a raw signature over exact Solana off-chain message v0 bytes (`ed25519DerivationMessage`), and wallets now offer off-chain signing only as v1 (`solana:signOffchainMessage`), which the SDK rejects. NOCT now signs with the wallet's current account object and shows the wallet's own reason | Phantom, Solflare, Backpack and a hardware wallet: unlock (raw signature over the v0 bytes) and v1 transaction support |
+| Wallet compatibility | Tested only with an injected QA wallet. The first live unlock (2026-11-10) failed at the derivation signature: Phantom refuses the message ("You cannot sign solana transactions using sign message"). The Privacy Rings SDK requires a raw signature over exact Solana off-chain message v0 bytes (`ed25519DerivationMessage`), and wallets now offer off-chain signing only as v1 (`solana:signOffchainMessage`), which the SDK rejects. NOCT now signs with the wallet's current account object and shows the wallet's own reason | Phantom, Solflare, Backpack and a hardware wallet: unlock (raw signature over the v0 bytes) and v1 transaction support |
 | Program upgrade-authority report | Fixture RPC has no program accounts, so Settings shows "Not deployed on mainnet" there | Read against mainnet RPC |
 | Pyth independent check | On-chain feed reading tested against synthetic accounts and the published account addresses only | Compare with the vault oracle on a live market |
 | Reconciliation under real congestion | Simulated in tests only | Observe a slow landing; confirm no resubmission and correct final state |
