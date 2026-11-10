@@ -22,7 +22,7 @@ export interface TokenInfo {
   symbol: string;
   name: string;
   decimals: number;
-  /** Proxied icon URL (same-origin) or null when the source host is not allowlisted. */
+  /** Same-origin proxied icon URL, or null when the metadata names no usable https or ipfs:// icon. */
   icon: string | null;
   tokenProgram: TokenProgramKind;
   tokenProgramId: string | null;
