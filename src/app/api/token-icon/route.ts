@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { rateLimit } from "@/lib/server/guard";
-import { iconCandidates, isAllowedIconUrl, normalizeIconUrl } from "@/lib/tokens/sanitize";
+import { iconCandidates, iconSpelling, isAllowedIconUrl, normalizeIconUrl } from "@/lib/tokens/sanitize";
 import { iconHosts } from "@/lib/server/jupiter";
 import { log } from "@/lib/server/log";
 
@@ -11,6 +11,13 @@ const MAX_BYTES = 1_500_000;
 const SIZE = 96;
 const IMAGE_SERVICE = "https://wsrv.nl/";
 const SERVICE_HOSTS = new Set(["wsrv.nl", "images.weserv.nl"]);
+/**
+ * Helius's image cache, in the form its DAS API gives as `cdn_uri`: the
+ * metadata URL appended to this prefix. It often still holds icons whose
+ * IPFS gateways refuse or rate-limit requests from shared server addresses.
+ */
+const HELIUS_CDN = "https://cdn.helius-rpc.com/cdn-cgi/image//";
+const HELIUS_CDN_HOST = "cdn.helius-rpc.com";
 /** The longest one icon request may take, so a slow source never holds it for long. */
 const BUDGET_MS = 9_000;
 /** How long a single attempt may take. */
@@ -142,19 +149,21 @@ function shortHost(url: URL): string {
  * Token icons, served from this origin so a user's IP never reaches the hosts
  * named in token metadata. Icons go through an image service (wsrv.nl), which
  * fetches any public https host, turns SVG and other formats into a small
- * raster and caches it; only raster bytes come back. IPFS icons are also
- * tried on other public gateways, since several that older metadata names
- * are slow or gone. If the service fails, allowlisted hosts are fetched
- * directly. Nothing but PNG, JPEG, GIF or WebP (checked by magic bytes) is
- * ever served.
+ * raster and caches it; only raster bytes come back. When that fails, the
+ * icon is taken from Helius's image cache, then (for IPFS) from other public
+ * gateways, then directly from allowlisted hosts. Nothing but PNG, JPEG, GIF
+ * or WebP (checked by magic bytes) is ever served.
  */
 export async function GET(req: NextRequest) {
   const limited = rateLimit(req, "icon");
   if (limited) return limited;
-  const source = normalizeIconUrl(req.nextUrl.searchParams.get("u"));
+  const raw = req.nextUrl.searchParams.get("u");
+  const source = normalizeIconUrl(raw);
   if (!source) return new Response(null, { status: 404 });
 
   const candidates = iconCandidates(source).slice(0, 4);
+  const [named, ...gateways] = candidates;
+  const cached = new URL(`${HELIUS_CDN}${iconSpelling(raw, source)}`);
   const hosts = iconHosts();
   const onAllowlist = (host: string) => isAllowedIconUrl(`https://${host}/`, hosts) !== null;
   const failures: string[] = [];
@@ -167,8 +176,12 @@ export async function GET(req: NextRequest) {
       failures.push(`${label}: ${outcome} after ${Date.now() - startedAt} ms`);
       return null;
     };
+  const resized = (label: string, url: URL) => attempt(`service ${label}`, (signal) => fetchImage(viaService(url), (host) => SERVICE_HOSTS.has(host), signal));
   const attempts: Attempt[] = [
-    ...candidates.map((c) => attempt(`service ${shortHost(c)}`, (signal) => fetchImage(viaService(c), (host) => SERVICE_HOSTS.has(host), signal))),
+    resized(shortHost(named!), named!),
+    resized("helius cdn", cached),
+    attempt("direct helius cdn", (signal) => fetchImage(cached, (host) => host === HELIUS_CDN_HOST, signal)),
+    ...gateways.map((c) => resized(shortHost(c), c)),
     ...candidates.filter((c) => onAllowlist(c.hostname)).map((c) => attempt(`direct ${shortHost(c)}`, (signal) => fetchImage(c, onAllowlist, signal))),
   ];
   const controller = new AbortController();

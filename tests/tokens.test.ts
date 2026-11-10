@@ -56,6 +56,10 @@ describe("untrusted metadata", () => {
   });
   it("accepts icons from any public https host, through the same-origin proxy", () => {
     expect(proxiedIconUrl("https://cdn.example.org/coin.png")).toBe("/api/token-icon?u=https%3A%2F%2Fcdn.example.org%2Fcoin.png");
+    // The metadata's own spelling is kept (image caches key on it); ipfs:// becomes a gateway URL.
+    const cid = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
+    expect(proxiedIconUrl(` https://${cid}.ipfs.nftstorage.link `)).toBe(`/api/token-icon?u=${encodeURIComponent(`https://${cid}.ipfs.nftstorage.link`)}`);
+    expect(proxiedIconUrl(`ipfs://${cid}`)).toBe(`/api/token-icon?u=${encodeURIComponent(`https://ipfs.io/ipfs/${cid}`)}`);
     for (const bad of ["http://cdn.example.org/a.png", "https://user:pw@cdn.example.org/a.png", "https://cdn.example.org:8443/a.png", "https://127.0.0.1/a.png", "https://2130706433/a.png", "https://[::1]/a.png", "https://localhost/a.png", "https://printer.local/a.png", "https://intranet/a.png", "data:image/png;base64,AAAA", `https://cdn.example.org/${"a".repeat(600)}`]) {
       expect(normalizeIconUrl(bad), bad).toBeNull();
     }

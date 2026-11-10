@@ -125,8 +125,17 @@ export function normalizeIconUrl(raw: unknown): URL | null {
   return url;
 }
 
+/**
+ * The icon URL spelled exactly as the metadata has it when that is already
+ * https (image caches key on that spelling), otherwise its safe https form.
+ */
+export function iconSpelling(raw: unknown, url: URL): string {
+  const text = typeof raw === "string" ? raw.trim() : "";
+  return /^https:\/\//i.test(text) ? text : url.toString();
+}
+
 /** Same-origin proxy URL for a token icon, or null when the metadata names none usable. */
 export function proxiedIconUrl(raw: unknown): string | null {
   const url = normalizeIconUrl(raw);
-  return url ? `/api/token-icon?u=${encodeURIComponent(url.toString())}` : null;
+  return url ? `/api/token-icon?u=${encodeURIComponent(iconSpelling(raw, url))}` : null;
 }

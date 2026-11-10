@@ -40,15 +40,23 @@ describe("token icon proxy", () => {
     expect(service.searchParams.get("output")).toBe("webp");
   });
 
+  it("falls back to Helius's image cache, asking for the URL exactly as the metadata spells it", async () => {
+    const cid = "bafkreibk3covs5ltyqxa272uodhculbr6kea6betidfwy3ajsav2vjzyum";
+    const { res, calls } = await getIcon(`https://${cid}.ipfs.nftstorage.link`, (url) => (url.hostname === "cdn.helius-rpc.com" ? new Response(PNG, { status: 200 }) : new Response(null, { status: 429 })));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(calls).toContain(`https://cdn.helius-rpc.com/cdn-cgi/image//https://${cid}.ipfs.nftstorage.link`);
+  });
+
   it("falls back to an allowlisted host when the service fails, following redirects within the allowlist", async () => {
     const { res, calls } = await getIcon("https://arweave.net/abc", (url) => {
-      if (url.hostname === "wsrv.nl") return new Response("error", { status: 502 });
+      if (url.hostname === "wsrv.nl" || url.hostname === "cdn.helius-rpc.com") return new Response("error", { status: 502 });
       if (url.hostname === "arweave.net") return new Response(null, { status: 302, headers: { location: "https://xyz.arweave.net/abc" } });
       return new Response(PNG, { status: 200 });
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
-    expect(calls.map((c) => new URL(c).hostname)).toEqual(["wsrv.nl", "arweave.net", "xyz.arweave.net"]);
+    expect(calls.map((c) => new URL(c).hostname).slice(-2)).toEqual(["arweave.net", "xyz.arweave.net"]);
   });
 
   it("never follows a redirect off the allowlist, and never serves SVG or other non-raster bytes", async () => {
@@ -65,7 +73,8 @@ describe("token icon proxy", () => {
   it("does not fetch a host outside the allowlist directly when the service is down", async () => {
     const { res, calls } = await getIcon("https://cdn.example.org/coin.png", () => new Response(null, { status: 503 }));
     expect(res.status).toBe(404);
-    expect(calls.every((c) => new URL(c).hostname === "wsrv.nl")).toBe(true);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((c) => ["wsrv.nl", "cdn.helius-rpc.com"].includes(new URL(c).hostname))).toBe(true);
   });
 
   it("tries another IPFS gateway when the one the metadata names fails", async () => {
@@ -75,7 +84,8 @@ describe("token icon proxy", () => {
       return url.hostname === "wsrv.nl" && asked.startsWith("https://ipfs.io/") ? new Response(WEBP, { status: 200 }) : new Response(null, { status: 404 });
     });
     expect(res.status).toBe(200);
-    expect(calls.map((c) => new URL(c).searchParams.get("url"))).toEqual([`https://${cid}.ipfs.nftstorage.link/`, `https://ipfs.io/ipfs/${cid}`]);
+    const asked = calls.filter((c) => new URL(c).hostname === "wsrv.nl").map((c) => new URL(c).searchParams.get("url"));
+    expect(asked).toEqual([`https://${cid}.ipfs.nftstorage.link/`, `https://cdn.helius-rpc.com/cdn-cgi/image//https://${cid}.ipfs.nftstorage.link/`, `https://ipfs.io/ipfs/${cid}`]);
   });
 
   it("starts the next gateway while a slow one is still running, and stops the slow one once an icon arrives", async () => {
@@ -83,7 +93,7 @@ describe("token icon proxy", () => {
     let stopped = false;
     const startedAt = Date.now();
     const { res, calls } = await getIcon(`https://${cid}.ipfs.nftstorage.link/`, (url, init) => {
-      if ((url.searchParams.get("url") ?? "").includes("nftstorage.link")) {
+      if ((url.searchParams.get("url") ?? "").startsWith(`https://${cid}.ipfs.`)) {
         return new Promise<Response>((_, reject) =>
           init?.signal?.addEventListener("abort", () => {
             stopped = true;
