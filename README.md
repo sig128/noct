@@ -11,6 +11,7 @@ NOCT states, per operation, exactly what becomes public. A public Jupiter swap i
 | Area | What it does | Backed by |
 | --- | --- | --- |
 | Swap | Quotes, review, wallet signature, landing, reconciliation; can pay from the private balance in three signed steps (public trade) and move what was bought back into it | Jupiter Swap API v2 (`/order`, `/execute`), Privacy Rings |
+| NOCT wallets | Up to 10 extra wallets per connected wallet, created from one signature of it and kept only in the tab; funded from the private balance, they buy, sell and send SOL back together, signing their own Jupiter orders. Not anonymous: funding and sending back link them to the connected wallet | Jupiter Swap API v2, Privacy Rings, `@noble/curves` |
 | Token discovery | Search by name, ticker or exact mint; impostor and risk flags; Token-2022 extension checks | Jupiter Tokens v2, on-chain mint accounts |
 | Balance | One ledger across public wallet, private balance, supplied, collateral and debt, with no double counting | Solana RPC, Privacy Rings SDK, Jupiter Lend |
 | Send and receive | Private transfers (amounts hidden, addresses visible), public withdrawals, receive address | `@heliuslabs/spr` 0.9.0-alpha (Default Ring) |
@@ -84,6 +85,7 @@ NOCT_SILENT_LOGS=1 npx next start -p 3100 -H 127.0.0.1   # terminal 2
 npm run qa:visual                     # screenshots at 1440, 1280, 768 and 390 px into qa-output/
 npm run qa:interaction                # keyboard, pointer, touch, routing, lifecycle and hygiene checks
 npm run qa:interaction -- --slow      # adds the 25-second quote-expiry check
+npm run qa:wallets                    # NOCT wallets: add three with a real message signature, buy from all three, close
 ```
 
 The QA scripts drive Chrome through `playwright-core`; set `QA_CHROME` to your Chrome or Chromium binary (default `/usr/bin/google-chrome`) and `QA_BASE` if the server is elsewhere.

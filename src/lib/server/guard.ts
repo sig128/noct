@@ -17,8 +17,9 @@ interface Bucket {
 const BUDGETS = {
   read: { capacity: 60, refillPerSec: 2 },
   quote: { capacity: 20, refillPerSec: 1 },
-  order: { capacity: 8, refillPerSec: 0.2 },
-  execute: { capacity: 6, refillPerSec: 0.2 },
+  // Room for one order and one execute per NOCT wallet (up to ten) in a batch.
+  order: { capacity: 12, refillPerSec: 0.3 },
+  execute: { capacity: 12, refillPerSec: 0.3 },
   rpc: { capacity: 120, refillPerSec: 6 },
   privacy: { capacity: 120, refillPerSec: 4 },
   icon: { capacity: 200, refillPerSec: 10 },

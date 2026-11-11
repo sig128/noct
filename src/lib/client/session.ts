@@ -5,6 +5,7 @@ import { api } from "./api";
 import { getPrivacySession, journal, reservations, setPrivacySession, useActivity, usePrivate, useWallet } from "./stores";
 import { connectWallet, disconnectWallet, onAccountsChanged, signExactMessage, type WalletOption } from "@/lib/wallet/standard";
 import type { UnlockMethod } from "@/lib/adapters/privacy/unlock";
+import { closeWallets } from "./wallets";
 import type { PrivacySession } from "@/lib/adapters/privacy/spr";
 import { useTxFlow, txFlow } from "./tx-flow";
 
@@ -14,6 +15,8 @@ let offAccountListener: (() => void) | null = null;
 export function invalidateSession(reason: string): void {
   useWallet.getState().bump();
   usePrivate.getState().lock(reason);
+  // NOCT wallets belong to the wallet that signed for them.
+  closeWallets();
   const flow = useTxFlow.getState();
   if (flow.open && !["submitting", "confirming", "pendingRecovery", "preparing"].includes(flow.phase)) txFlow.cancel(reason);
   journal.clearFinished();

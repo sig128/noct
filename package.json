@@ -18,6 +18,7 @@
     "fixtures": "node scripts/fixture-upstream.mjs",
     "qa:visual": "node scripts/visual-qa.mjs",
     "qa:interaction": "node scripts/interaction-qa.mjs",
+    "qa:wallets": "node scripts/wallets-qa.mjs",
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {

@@ -780,3 +780,13 @@
 .capState[data-status="unknown"] {
   color: var(--warn);
 }
+
+.walletsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 0 8px;
+  color: var(--text-3);
+  font-size: var(--fs-small);
+}

@@ -1,0 +1,149 @@
+.panel {
+  border-radius: var(--radius-card);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 580;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.count {
+  color: var(--text-3);
+  font-size: var(--fs-small);
+  font-weight: 480;
+}
+
+.headTools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.row {
+  padding: 6px 6px 6px 12px;
+}
+
+.rowMain {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.name {
+  font-size: var(--fs-small);
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+.address {
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+}
+
+.amounts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: 10px;
+  font-size: var(--fs-small);
+  color: var(--text-2);
+  text-align: right;
+}
+
+.run {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: var(--fs-micro);
+  color: var(--text-2);
+}
+
+.run[data-phase="done"] {
+  color: var(--accent);
+}
+
+.run[data-phase="failed"] {
+  color: #f3b5a9;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-small);
+  color: var(--text-2);
+}
+
+.field input {
+  max-width: 140px;
+  text-align: right;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.secondary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+  text-align: center;
+}
+
+@media (max-width: 420px) {
+  .rowMain {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .address {
+    display: none;
+  }
+
+  .rowMain > :nth-child(3) {
+    display: none;
+  }
+}

@@ -22,6 +22,7 @@ Classes are ordered by strength (E weakest, D strongest). A weaker result than r
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Public swap (Jupiter) | E | public | public | public | public | none | n/a: anyone reading the ledger |
 | Swap paid from the private balance (three signed steps: move out, Jupiter swap, move back in) | E, each step | public | public | public | public | the move out and the move back in | n/a: the three steps can be linked; only the balance afterwards is hidden |
+| NOCT wallets: funding from the private balance, buys and sells, sending SOL back | E, each step | public | public | public | public | every step | n/a: each funding withdrawal is signed by your wallet and names the NOCT wallet, so the wallets can be linked to you |
 | Deposit into private balance | E | public | public | public | public | the deposit itself | You, for the resulting private balance |
 | Private transfer (Default Ring) | A | public | public | **hidden** | **hidden** | none | You, the recipient, anyone holding your derivation signature |
 | Withdrawal to a public address | E | public | public | public | public | the withdrawal itself | n/a |

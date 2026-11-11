@@ -9,6 +9,7 @@ import { RightActionRail } from "./RightActionRail";
 import { MobileNav } from "./MobileNav";
 import { SwapCard } from "@/components/swap/SwapCard";
 import { ContextStrip } from "@/components/swap/ContextStrip";
+import { WalletsPanel } from "@/components/swap/WalletsPanel";
 import { WalletPicker } from "@/components/wallet/WalletPicker";
 import { TxDialog } from "@/components/tx/TxDialog";
 import { AmbientContext } from "./AmbientContext";
@@ -63,6 +64,7 @@ export function AppShell() {
         <main className={styles.workspace}>
           <div className={styles.swapColumn} data-ring-center>
             <SwapCard headingLevel={module === "swap" ? 1 : 2} />
+            <WalletsPanel />
             <ContextStrip />
           </div>
           <div className={styles.contextColumn} data-module={module}>

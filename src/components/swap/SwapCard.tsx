@@ -24,6 +24,8 @@ import { TokenPicker } from "./TokenPicker";
 import { QuoteDetails } from "./QuoteDetails";
 import { DisclosurePreview } from "./DisclosurePreview";
 import { useSwapQuote } from "./useSwapQuote";
+import { addWallet, useWallets } from "@/lib/client/wallets";
+import { MAX_WALLETS } from "@/lib/wallets/derive";
 import styles from "./swap.module.css";
 
 function usd(amount: bigint | null, token: TokenInfo | null, price: string | undefined): string | null {
@@ -34,6 +36,8 @@ function usd(amount: bigint | null, token: TokenInfo | null, price: string | und
 
 export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
   const { input, output, amountText, requestedPrivacy, set } = useSwapDraft();
+  const walletsShown = useWallets((w) => w.shown.length);
+  const walletsOpening = useWallets((w) => w.status === "opening");
   const slippage = useSettings((s) => s.slippageBps);
   const address = useWallet((s) => s.address);
   const privateStatus = usePrivate((s) => s.status);
@@ -388,6 +392,22 @@ export function SwapCard({ headingLevel }: { headingLevel: 1 | 2 }) {
           </p>
         ) : null}
       </div>
+
+      {walletsShown === 0 ? (
+        <div className={styles.walletsRow}>
+          <span>Buy with up to {MAX_WALLETS} wallets at once</span>
+          <button
+            type="button"
+            className="btn btn-quiet"
+            onClick={() => void addWallet()}
+            disabled={!address || walletsOpening}
+            title={address ? "Adds a NOCT wallet created from your wallet's signature" : "Connect a wallet first"}
+          >
+            {walletsOpening ? <Spinner size={14} /> : <Icon name="plus" size={16} />}
+            {walletsOpening ? "Waiting for signature" : "Add wallet"}
+          </button>
+        </div>
+      ) : null}
 
       <TokenPicker
         open={picker !== null}

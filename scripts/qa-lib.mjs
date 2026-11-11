@@ -26,7 +26,7 @@ export async function testWallet() {
  * fee payer's signature slot with a fixed pattern; the fixture upstream
  * accepts it. It can never produce a valid signature for a real network.
  */
-export function walletInitScript({ address, publicKey, supportsV1 = false, rejectSign = false, delayMs = 0 }) {
+export function walletInitScript({ address, publicKey, supportsV1 = false, rejectSign = false, delayMs = 0, realMessages = false }) {
   return `(() => {
     const account = Object.freeze({ address: ${JSON.stringify(address)}, publicKey: new Uint8Array(${JSON.stringify(publicKey)}), chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] });
     const listeners = new Set();
@@ -42,7 +42,7 @@ export function walletInitScript({ address, publicKey, supportsV1 = false, rejec
         "standard:disconnect": { version: "1.0.0", disconnect: async () => { window.__qaConnected = false; } },
         "standard:events": { version: "1.0.0", on: (e, l) => { listeners.add(l); return () => listeners.delete(l); } },
         "solana:signTransaction": { version: "1.0.0", supportedTransactionVersions: ${supportsV1 ? '["legacy", 0, 1]' : '["legacy", 0]'}, signTransaction: async (...inputs) => { window.__qaSignCalls = (window.__qaSignCalls || 0) + 1; if (${delayMs}) await new Promise((r) => setTimeout(r, ${delayMs})); if (${rejectSign ? "true" : "false"}) { const e = new Error("User rejected the request."); e.code = 4001; throw e; } window.__qaSigned = (window.__qaSigned || 0) + inputs.length; return inputs.map((i) => ({ signedTransaction: fakeSign(i.transaction) })); } },
-        "solana:signMessage": { version: "1.0.0", signMessage: async (...inputs) => inputs.map((i) => ({ signedMessage: i.message, signature: new Uint8Array(64).fill(7) })) },
+        "solana:signMessage": { version: "1.0.0", signMessage: async (...inputs) => Promise.all(inputs.map(async (i) => ({ signedMessage: i.message, signature: ${realMessages ? "new Uint8Array(await window.__qaSignMessage(Array.from(i.message)))" : "new Uint8Array(64).fill(7)"} }))) },
       },
     };
     const callback = ({ register }) => register(wallet);
