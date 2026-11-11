@@ -13,10 +13,11 @@ const body = z.object({ recipient: address, refundTo: address, amount: lamports 
 export async function GET(req: NextRequest) {
   const limited = rateLimit(req, "quote");
   if (limited) return limited;
-  const parsed = body.safeParse(Object.fromEntries(req.nextUrl.searchParams));
+  const params = Object.fromEntries(req.nextUrl.searchParams);
+  const parsed = body.safeParse(params);
   if (!parsed.success) return badRequest("Invalid funding quote request");
   try {
-    const result = await quoteSolFunding({ ...parsed.data, amount: BigInt(parsed.data.amount), dry: true });
+    const result = await quoteSolFunding({ ...parsed.data, amount: BigInt(parsed.data.amount), dry: true, confidential: params.route !== "public" });
     return NextResponse.json({ quote: result.quote });
   } catch (error) {
     return errorResponse(error);

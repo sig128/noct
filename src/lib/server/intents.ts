@@ -50,7 +50,7 @@ export type FundingQuote = z.infer<typeof quoteSchema>;
  * public Solana transfers, but the trail between them runs on NEAR's private
  * shard. `dry` quotes create no deposit address.
  */
-export async function quoteSolFunding(input: { recipient: string; refundTo: string; amount: bigint; dry: boolean }): Promise<FundingQuote> {
+export async function quoteSolFunding(input: { recipient: string; refundTo: string; amount: bigint; dry: boolean; confidential?: boolean }): Promise<FundingQuote> {
   const body = {
     dry: input.dry,
     swapType: "EXACT_INPUT",
@@ -64,9 +64,11 @@ export async function quoteSolFunding(input: { recipient: string; refundTo: stri
     recipient: input.recipient,
     recipientType: "DESTINATION_CHAIN",
     deadline: new Date(Date.now() + 30 * 60_000).toISOString(),
-    confidentiality: "advanced",
+    confidentiality: input.confidential === false ? "public" : "advanced",
   };
   const { status, data } = await upstreamJson(`${BASE}/quote`, { service: "near-intents", method: "POST", body, headers: headers(), timeoutMs: 20_000 });
+  // A refusal of NOCT's credentials is NOCT's problem, not the person's: report it as an upstream failure.
+  if (status === 401 || status === 403) throw new UpstreamError("status", "near-intents", `NEAR Intents refused the request (${status}): ${upstreamMessage(data, "no reason given")}`, 502);
   if (status !== 200 && status !== 201) throw new UpstreamError("status", "near-intents", upstreamMessage(data, `NEAR Intents returned ${status}`), status);
   const parsed = parseWith(quoteSchema, data, "near-intents");
   if (!input.dry && !parsed.quote.depositAddress) throw new UpstreamError("invalid_schema", "near-intents", "NEAR Intents returned no deposit address");
