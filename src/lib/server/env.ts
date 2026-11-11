@@ -19,6 +19,8 @@ const schema = z.object({
   NOCT_ICON_HOSTS: z.string().optional(),
   /** The deployment's own IPFS gateway for token icons (see ipfsGatewayUrl). */
   NOCT_IPFS_GATEWAY: z.string().optional(),
+  /** NEAR Intents 1Click API key (sent as X-API-Key); without one the 1Click service charges its own extra fee. */
+  NEAR_INTENTS_API_KEY: z.string().min(8).optional(),
 });
 
 export type ServerEnv = z.infer<typeof schema>;
